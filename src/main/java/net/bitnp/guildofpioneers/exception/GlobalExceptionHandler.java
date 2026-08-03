@@ -1,6 +1,7 @@
 package net.bitnp.guildofpioneers.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -18,6 +19,7 @@ import java.util.Map;
 /**
  * Centralized exception handling that maps thrown exceptions to JSON error responses.
  */
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -25,6 +27,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handlePhoneAlreadyExists(
             PhoneAlreadyExistsException ex, HttpServletRequest request
     ) {
+        log.trace("Registration rejected: {}", ex.getMessage());
         return build(HttpStatus.CONFLICT, "CONFLICT", ex.getMessage(), request);
     }
 
@@ -32,6 +35,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleInvalidTicket(
             RuntimeException ex, HttpServletRequest request
     ) {
+        log.trace("Invalid registration ticket: {}", ex.getMessage());
         return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), request);
     }
 
@@ -39,6 +43,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleBadCredentials(
             BadCredentialsException ex, HttpServletRequest request
     ) {
+        log.trace("Failed login attempt for {} {}", request.getMethod(), request.getRequestURI());
         return build(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", ex.getMessage(), request);
     }
 
@@ -50,6 +55,7 @@ public class GlobalExceptionHandler {
         String message = fieldError != null
                 ? fieldError.getField() + " " + fieldError.getDefaultMessage()
                 : "Validation failed";
+        log.trace("Request rejected due to validation failure: {}", message);
         return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", message, request);
     }
 
@@ -57,6 +63,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleInvalidFileType(
             InvalidFileTypeException ex, HttpServletRequest request
     ) {
+        log.trace("Upload rejected: {}", ex.getMessage());
         return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), request);
     }
 
@@ -64,6 +71,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleMissingFile(
             MissingServletRequestPartException ex, HttpServletRequest request
     ) {
+        log.trace("Upload rejected: multipart file is required");
         return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Multipart file is required", request);
     }
 
@@ -71,6 +79,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleMaxUploadSize(
             MaxUploadSizeExceededException ex, HttpServletRequest request
     ) {
+        log.trace("Upload rejected: file exceeds maximum allowed size");
         return build(HttpStatus.CONTENT_TOO_LARGE, "CONTENT_TOO_LARGE", "File exceeds maximum allowed size", request);
     }
 

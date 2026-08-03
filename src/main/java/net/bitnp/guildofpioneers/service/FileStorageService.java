@@ -61,6 +61,7 @@ public class FileStorageService {
             log.info("Stored avatar for user {} at {}", userId, target);
             return PUBLIC_PREFIX + AVATAR_DIR + "/" + target.getFileName();
         } catch (IOException ex) {
+            log.error("Failed to store avatar for user {} in {}", userId, dir, ex);
             throw new IllegalStateException("Failed to store avatar", ex);
         }
     }

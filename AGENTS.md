@@ -344,6 +344,17 @@ Never log:
 * Tokens
 * Sensitive information
 
+## Log Levels
+
+Use levels to reflect operational importance. Make good `INFO` decisions:
+
+* `TRACE` — user behavior and client-triggered events (login, logout, registration, avatar updates, ticket creation, and rejections of user input). These are verbose and not visible in a default `INFO`-level stream.
+* `INFO` — meaningful state changes performed by the application itself and successful operations worth seeing in a default log stream (e.g. file stored, file deleted).
+* `WARN` — recoverable problems or suspicious activity that deserve attention (e.g. path traversal attempt, failed file deletion).
+* `ERROR` — failures that prevent an operation from completing and need investigation (e.g. unable to store an avatar).
+
+Rule of thumb: log user behavior and client-triggered events at `TRACE`; only application-internal state changes and system problems use `INFO`/`WARN`/`ERROR`. Avoid logging every request, trivial read-only operations, or noisy detail that provides no operational value.
+
 ---
 
 # Configuration

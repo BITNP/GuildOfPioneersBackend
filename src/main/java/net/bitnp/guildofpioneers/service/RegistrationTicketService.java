@@ -9,6 +9,7 @@ import net.bitnp.guildofpioneers.exception.TicketNotFoundException;
 import net.bitnp.guildofpioneers.exception.UserNotFoundException;
 import net.bitnp.guildofpioneers.repository.RegistrationTicketRepository;
 import net.bitnp.guildofpioneers.repository.UserRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +19,7 @@ import java.time.Instant;
 /**
  * Manages the lifecycle of registration tickets, including creation and validation.
  */
+@Slf4j
 @Service
 public class RegistrationTicketService {
 
@@ -55,7 +57,9 @@ public class RegistrationTicketService {
                 .expiresAt(request.getExpiresAt())
                 .createdBy(creator.getId())
                 .build();
-        return toResponse(registrationTicketRepository.save(ticket));
+        RegistrationTicket saved = registrationTicketRepository.save(ticket);
+        log.trace("Registration ticket {} created by user {}", saved.getId(), saved.getCreatedBy());
+        return toResponse(saved);
     }
 
     /**

@@ -3,6 +3,7 @@ package net.bitnp.guildofpioneers.controller;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import net.bitnp.guildofpioneers.dto.request.LoginRequest;
 import net.bitnp.guildofpioneers.dto.request.RegisterRequest;
 import net.bitnp.guildofpioneers.dto.response.AuthResponse;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Authentication endpoints for registration, login, profile retrieval, and avatar upload.
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -72,6 +74,7 @@ public class AuthController {
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
         securityContextRepository.saveContext(context, httpRequest, httpResponse);
+        log.trace("User {} logged in", request.getPhone());
         return authService.getCurrentUser(authentication);
     }
 

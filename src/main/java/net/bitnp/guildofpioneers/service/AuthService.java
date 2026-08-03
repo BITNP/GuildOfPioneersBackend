@@ -6,6 +6,7 @@ import net.bitnp.guildofpioneers.entity.User;
 import net.bitnp.guildofpioneers.exception.PhoneAlreadyExistsException;
 import net.bitnp.guildofpioneers.exception.UserNotFoundException;
 import net.bitnp.guildofpioneers.repository.UserRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * Handles user registration, profile retrieval, and avatar updates.
  */
+@Slf4j
 @Service
 public class AuthService {
 
@@ -56,7 +58,9 @@ public class AuthService {
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .build();
-        return toResponse(userRepository.save(user));
+        User saved = userRepository.save(user);
+        log.trace("User with phone {} registered as id {}", request.getPhone(), saved.getId());
+        return toResponse(saved);
     }
 
     /**
@@ -82,7 +86,9 @@ public class AuthService {
         String storedPath = fileStorageService.storeAvatar(file, user.getId());
         fileStorageService.deleteAvatar(user.getAvatar());
         user.setAvatar(storedPath);
-        return toResponse(userRepository.save(user));
+        AuthResponse response = toResponse(userRepository.save(user));
+        log.trace("User {} updated their avatar", user.getId());
+        return response;
     }
 
     private User findByAuthentication(Authentication authentication) {

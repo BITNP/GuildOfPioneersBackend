@@ -1,6 +1,7 @@
 package net.bitnp.guildofpioneers.config;
 
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
@@ -26,6 +27,7 @@ import java.util.Map;
 /**
  * Configures Spring Security beans and the HTTP security filter chain.
  */
+@Slf4j
 @Configuration
 public class SecurityConfig {
 
@@ -75,8 +77,11 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(unauthorizedEntryPoint))
                 .logout(logout -> logout
                         .logoutUrl("/api/auth/logout")
-                        .logoutSuccessHandler((request, response, authentication) ->
-                                response.setStatus(HttpServletResponse.SC_NO_CONTENT)));
+                        .logoutSuccessHandler((request, response, authentication) -> {
+                            log.trace("User {} logged out",
+                                    authentication != null ? authentication.getName() : "unknown");
+                            response.setStatus(HttpServletResponse.SC_NO_CONTENT);
+                        }));
         return http.build();
     }
 }
