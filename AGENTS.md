@@ -427,6 +427,31 @@ Use correct HTTP status codes:
 
 ---
 
+# API Documentation
+
+`doc/API.md` is the source of truth for the API contract.
+
+Agents MUST update `doc/API.md` whenever the API changes, in the same change/commit.
+
+Update it when:
+
+* A new endpoint is added
+* An existing endpoint is modified (path, method, request/response shape, status codes, errors)
+* An existing endpoint is removed
+
+For every endpoint, use the format defined in `doc/API.md`:
+
+* HTTP method and path
+* Description of behavior
+* Authentication requirements
+* Request body / path parameters / query parameters
+* Success response (status and body)
+* Error responses (status and meaning)
+
+Do not leave the documentation stale or mark it as a follow-up; update it as part of the API change.
+
+---
+
 # Security
 
 When implementing authentication:
@@ -522,3 +547,14 @@ For every feature:
 8. Add tests
 
 Keep commits small and focused.
+
+---
+
+# Testing Requirement
+
+Every time you update code, run the related tests before considering the task complete.
+
+* Run the full test suite when changes could affect the whole application.
+* Run targeted tests when changes are scoped to a single module/component.
+* Fix any failures caused by your changes before finishing.
+* Never leave the build or tests broken.
