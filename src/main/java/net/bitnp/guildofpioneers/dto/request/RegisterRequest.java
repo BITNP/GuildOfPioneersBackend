@@ -29,6 +29,9 @@ public class RegisterRequest {
     @NotBlank
     private String avatar;
 
+    @NotBlank
+    private String ticketCode;
+
     @Email
     private String email;
 }

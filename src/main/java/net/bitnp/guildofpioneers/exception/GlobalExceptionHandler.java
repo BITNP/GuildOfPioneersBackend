@@ -23,6 +23,13 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, "CONFLICT", ex.getMessage(), request);
     }
 
+    @ExceptionHandler({TicketNotFoundException.class, TicketExpiredException.class})
+    public ResponseEntity<Map<String, Object>> handleInvalidTicket(
+            RuntimeException ex, HttpServletRequest request
+    ) {
+        return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), request);
+    }
+
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<Map<String, Object>> handleBadCredentials(
             BadCredentialsException ex, HttpServletRequest request

@@ -4,6 +4,7 @@ import net.bitnp.guildofpioneers.dto.request.RegisterRequest;
 import net.bitnp.guildofpioneers.dto.response.AuthResponse;
 import net.bitnp.guildofpioneers.entity.User;
 import net.bitnp.guildofpioneers.exception.PhoneAlreadyExistsException;
+import net.bitnp.guildofpioneers.exception.TicketExpiredException;
 import net.bitnp.guildofpioneers.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +17,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,6 +29,9 @@ class AuthServiceTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private RegistrationTicketService registrationTicketService;
 
     @InjectMocks
     private AuthService authService;
@@ -45,11 +50,13 @@ class AuthServiceTest {
                 .password("secret123")
                 .userName("Alice")
                 .avatar("avatar-url")
+                .ticketCode("VALIDCODE123")
                 .email("alice@example.com")
                 .build();
 
         AuthResponse response = authService.register(request);
 
+        verify(registrationTicketService).validate("VALIDCODE123");
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(captor.capture());
         assertThat(captor.getValue().getPassword()).isEqualTo("encoded-hash");
@@ -67,9 +74,27 @@ class AuthServiceTest {
                 .password("secret123")
                 .userName("Alice")
                 .avatar("avatar-url")
+                .ticketCode("VALIDCODE123")
                 .build();
 
         assertThatThrownBy(() -> authService.register(request))
                 .isInstanceOf(PhoneAlreadyExistsException.class);
+    }
+
+    @Test
+    void register_rejectsExpiredTicket() {
+        doThrow(new TicketExpiredException("EXPIRED123")).when(registrationTicketService)
+                .validate("EXPIRED123");
+
+        RegisterRequest request = RegisterRequest.builder()
+                .phone("13800000000")
+                .password("secret123")
+                .userName("Alice")
+                .avatar("avatar-url")
+                .ticketCode("EXPIRED123")
+                .build();
+
+        assertThatThrownBy(() -> authService.register(request))
+                .isInstanceOf(TicketExpiredException.class);
     }
 }

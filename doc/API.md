@@ -61,15 +61,40 @@ Keep entries sorted by path, then by HTTP method.
   - `404 NOT_FOUND` - when ...
 -->
 
+### `POST /api/admin/tickets`
+
+- **Description**: Creates a registration ticket. The generated code is valid until `expiresAt`. Admin/staff authorization is not yet enforced; any authenticated user can create tickets for now.
+- **Authentication**: Authenticated session. The current user is recorded as the ticket creator.
+- **Request Body**: `CreateRegistrationTicketRequest`:
+  - `expiresAt` (string, required) - ISO-8601 instant when the ticket expires; must be in the future.
+- **Path Parameters**: -
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `201 CREATED`
+  - **Body**:
+    ```json
+    {
+      "id": 1,
+      "code": "K7M2P9Q4R6TW",
+      "createdAt": "2026-08-03T04:00:00.000Z",
+      "expiresAt": "2026-09-03T04:00:00.000Z",
+      "createdBy": 1
+    }
+    ```
+- **Error Responses**:
+  - `400 BAD_REQUEST` - `expiresAt` missing or not in the future.
+  - `401 UNAUTHORIZED` - not authenticated.
+
 ### `POST /api/auth/register`
 
-- **Description**: Registers a new user. The password is stored as a BCrypt hash.
+- **Description**: Registers a new user. A valid, non-expired registration ticket code is required. The password is stored as a BCrypt hash.
 - **Authentication**: None.
 - **Request Body**: `RegisterRequest`:
   - `phone` (string, required) - login identifier.
   - `password` (string, required, min 8 chars) - plaintext password, hashed before storing.
   - `userName` (string, required) - display name.
   - `avatar` (string, required) - avatar URL.
+  - `ticketCode` (string, required) - registration ticket code; must exist and not be expired.
   - `email` (string, optional) - must be a valid email when provided.
 - **Path Parameters**: -
 - **Query Parameters**: -
@@ -86,7 +111,7 @@ Keep entries sorted by path, then by HTTP method.
     }
     ```
 - **Error Responses**:
-  - `400 BAD_REQUEST` - validation failed or invalid email.
+  - `400 BAD_REQUEST` - validation failed, invalid email, unknown ticket code, or expired ticket code.
   - `409 CONFLICT` - phone is already registered.
 
 ### `POST /api/auth/login`

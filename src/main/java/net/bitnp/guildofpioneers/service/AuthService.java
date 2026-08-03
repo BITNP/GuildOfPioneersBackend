@@ -15,14 +15,21 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RegistrationTicketService registrationTicketService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public AuthService(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            RegistrationTicketService registrationTicketService
+    ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.registrationTicketService = registrationTicketService;
     }
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        registrationTicketService.validate(request.getTicketCode());
         if (userRepository.existsByPhone(request.getPhone())) {
             throw new PhoneAlreadyExistsException(request.getPhone());
         }
