@@ -12,7 +12,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
+
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -33,6 +38,9 @@ class AuthServiceTest {
     @Mock
     private RegistrationTicketService registrationTicketService;
 
+    @Mock
+    private FileStorageService fileStorageService;
+
     @InjectMocks
     private AuthService authService;
 
@@ -49,7 +57,6 @@ class AuthServiceTest {
                 .phone("13800000000")
                 .password("secret123")
                 .userName("Alice")
-                .avatar("avatar-url")
                 .ticketCode("VALIDCODE123")
                 .email("alice@example.com")
                 .build();
@@ -73,7 +80,6 @@ class AuthServiceTest {
                 .phone("13800000000")
                 .password("secret123")
                 .userName("Alice")
-                .avatar("avatar-url")
                 .ticketCode("VALIDCODE123")
                 .build();
 
@@ -90,11 +96,37 @@ class AuthServiceTest {
                 .phone("13800000000")
                 .password("secret123")
                 .userName("Alice")
-                .avatar("avatar-url")
                 .ticketCode("EXPIRED123")
                 .build();
 
         assertThatThrownBy(() -> authService.register(request))
                 .isInstanceOf(TicketExpiredException.class);
+    }
+
+    @Test
+    void updateAvatar_storesFileDeletesOldAndSavesUser() {
+        Authentication authentication = new TestingAuthenticationToken("13800000000", null);
+        User user = User.builder()
+                .id(42L)
+                .userName("Alice")
+                .avatar("/uploads/avatars/42.png")
+                .phone("13800000000")
+                .password("encoded-hash")
+                .build();
+        when(userRepository.findByPhone("13800000000")).thenReturn(Optional.of(user));
+        when(userRepository.save(user)).thenReturn(user);
+        when(fileStorageService.storeAvatar(any(), org.mockito.ArgumentMatchers.eq(42L)))
+                .thenReturn("/uploads/avatars/42.jpg");
+        when(fileStorageService.getVersion("/uploads/avatars/42.jpg")).thenReturn(1720000000000L);
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "avatar.jpg", "image/jpeg", new byte[]{(byte) 0xFF, (byte) 0xD8}
+        );
+
+        AuthResponse response = authService.updateAvatar(authentication, file);
+
+        verify(fileStorageService).deleteAvatar("/uploads/avatars/42.png");
+        verify(userRepository).save(user);
+        assertThat(user.getAvatar()).isEqualTo("/uploads/avatars/42.jpg");
+        assertThat(response.getAvatar()).isEqualTo("/uploads/avatars/42.jpg?v=1720000000000");
     }
 }

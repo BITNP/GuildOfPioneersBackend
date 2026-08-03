@@ -27,9 +27,6 @@ public class RegisterRequest {
     private String userName;
 
     @NotBlank
-    private String avatar;
-
-    @NotBlank
     private String ticketCode;
 
     @Email

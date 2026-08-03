@@ -87,13 +87,12 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `POST /api/auth/register`
 
-- **Description**: Registers a new user. A valid, non-expired registration ticket code is required. The password is stored as a BCrypt hash.
+- **Description**: Registers a new user. A valid, non-expired registration ticket code is required. The password is stored as a BCrypt hash. A user has no avatar until one is uploaded via `PUT /api/auth/avatar`.
 - **Authentication**: None.
 - **Request Body**: `RegisterRequest`:
   - `phone` (string, required) - login identifier.
   - `password` (string, required, min 8 chars) - plaintext password, hashed before storing.
   - `userName` (string, required) - display name.
-  - `avatar` (string, required) - avatar URL.
   - `ticketCode` (string, required) - registration ticket code; must exist and not be expired.
   - `email` (string, optional) - must be a valid email when provided.
 - **Path Parameters**: -
@@ -105,7 +104,7 @@ Keep entries sorted by path, then by HTTP method.
     {
       "id": 1,
       "userName": "Alice",
-      "avatar": "https://example.com/avatar.png",
+      "avatar": null,
       "phone": "13800000000",
       "email": "alice@example.com"
     }
@@ -130,7 +129,7 @@ Keep entries sorted by path, then by HTTP method.
     {
       "id": 1,
       "userName": "Alice",
-      "avatar": "https://example.com/avatar.png",
+      "avatar": "/uploads/avatars/1.png?v=1720000000000",
       "phone": "13800000000",
       "email": "alice@example.com"
     }
@@ -165,10 +164,48 @@ Keep entries sorted by path, then by HTTP method.
     {
       "id": 1,
       "userName": "Alice",
-      "avatar": "https://example.com/avatar.png",
+      "avatar": "/uploads/avatars/1.png?v=1720000000000",
       "phone": "13800000000",
       "email": "alice@example.com"
     }
     ```
 - **Error Responses**:
   - `401 UNAUTHORIZED` - not authenticated.
+
+### `PUT /api/auth/avatar`
+
+- **Description**: Uploads (or replaces) the current user's avatar. The image is stored on the server under `app.upload-dir` (`./uploads/avatars/` by default), named `<userId>.<ext>`. The user's `avatar` field becomes the public path. An older locally stored file is deleted; if a file with the same extension is re-uploaded, clients should use the `?v=` version query parameter to bypass cached copies.
+- **Authentication**: Authenticated session.
+- **Request Body**: multipart form-data:
+  - `file` (binary, required) - avatar image. Allowed types: `image/jpeg`, `image/png`, `image/webp`, `image/gif`. Max size 5MB.
+- **Path Parameters**: -
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**:
+    ```json
+    {
+      "id": 1,
+      "userName": "Alice",
+      "avatar": "/uploads/avatars/1.png?v=1720000000000",
+      "phone": "13800000000",
+      "email": "alice@example.com"
+    }
+    ```
+- **Error Responses**:
+  - `400 BAD_REQUEST` - `file` part missing, empty, or unsupported image type.
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `413 CONTENT_TOO_LARGE` - file exceeds the maximum allowed size.
+
+### `GET /uploads/avatars/{fileName}`
+
+- **Description**: Serves a stored avatar image directly from the server's filesystem. Public, no authentication.
+- **Authentication**: None.
+- **Request Body**: -
+- **Path Parameters**: `fileName` (string) - avatar file name, e.g. `1.png`.
+- **Query Parameters**: `v` (string, optional) - cache-busting version (the file's last-modified timestamp).
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**: binary image bytes with the matching `Content-Type`.
+- **Error Responses**:
+  - `404 NOT_FOUND` - no such file.

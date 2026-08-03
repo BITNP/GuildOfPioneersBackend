@@ -8,6 +8,8 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -46,6 +48,27 @@ public class GlobalExceptionHandler {
                 ? fieldError.getField() + " " + fieldError.getDefaultMessage()
                 : "Validation failed";
         return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", message, request);
+    }
+
+    @ExceptionHandler(InvalidFileTypeException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidFileType(
+            InvalidFileTypeException ex, HttpServletRequest request
+    ) {
+        return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingFile(
+            MissingServletRequestPartException ex, HttpServletRequest request
+    ) {
+        return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Multipart file is required", request);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleMaxUploadSize(
+            MaxUploadSizeExceededException ex, HttpServletRequest request
+    ) {
+        return build(HttpStatus.CONTENT_TOO_LARGE, "CONTENT_TOO_LARGE", "File exceeds maximum allowed size", request);
     }
 
     private ResponseEntity<Map<String, Object>> build(
