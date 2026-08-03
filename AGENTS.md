@@ -467,6 +467,51 @@ Never trust client-side permission checks.
 
 # Code Style
 
+## Javadoc
+
+Every class and every important public method MUST have a Javadoc comment.
+
+Rules:
+
+* Class-level Javadoc: briefly describe the purpose/responsibility of the class.
+* Method-level Javadoc: briefly describe what the method does and its usage. Required for methods that contain meaningful logic (business rules, validation, file I/O, security setup, etc.).
+* Use `@param`, `@return`, and `@throws` where they add value.
+* Keep Javadoc brief but meaningful. Do not repeat the code; explain intent and usage.
+
+Example:
+
+```java
+/**
+ * Handles user account creation and retrieval.
+ */
+public class UserService {
+
+    private final UserRepository userRepository;
+
+    /**
+     * Creates a new user from the given request.
+     *
+     * @param request the validated registration data
+     * @return the created user response
+     * @throws UserNotFoundException if the referrer does not exist
+     */
+    @Transactional
+    public UserResponse create(CreateUserRequest request) {
+        // business logic here
+    }
+}
+```
+
+Exceptions (skip Javadoc when the purpose is clear):
+
+* Simple private tool/helper methods whose intent is obvious from the name (e.g. `toResponse()`, `generateCode()`).
+* One-line adapter methods that only delegate or wire existing functionality (e.g. `@Override` methods that just call another service).
+* Test methods whose purpose is clearly stated by the method name.
+* Simple getters/setters and overrides.
+* Plain DTO/entity data holders may use a short class-level Javadoc only.
+
+---
+
 ## Naming
 
 Classes:

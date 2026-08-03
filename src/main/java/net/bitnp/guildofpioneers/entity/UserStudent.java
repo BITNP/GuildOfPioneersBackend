@@ -10,6 +10,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Represents the student identifier associated with a user.
+ */
 @Entity
 @Table(name = "user_students")
 @Getter

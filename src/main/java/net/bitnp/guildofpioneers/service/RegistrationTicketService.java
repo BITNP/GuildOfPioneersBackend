@@ -15,6 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.Instant;
 
+/**
+ * Manages the lifecycle of registration tickets, including creation and validation.
+ */
 @Service
 public class RegistrationTicketService {
 
@@ -34,6 +37,14 @@ public class RegistrationTicketService {
         this.userRepository = userRepository;
     }
 
+    /**
+     * Creates a new registration ticket for the given creator.
+     *
+     * @param request      the ticket creation data
+     * @param creatorPhone the phone number of the user creating the ticket
+     * @return the created ticket
+     * @throws UserNotFoundException if the creator does not exist
+     */
     @Transactional
     public RegistrationTicketResponse create(CreateRegistrationTicketRequest request, String creatorPhone) {
         User creator = userRepository.findByPhone(creatorPhone)
@@ -47,6 +58,13 @@ public class RegistrationTicketService {
         return toResponse(registrationTicketRepository.save(ticket));
     }
 
+    /**
+     * Validates that a registration ticket exists and has not expired.
+     *
+     * @param code the ticket code to validate
+     * @throws TicketNotFoundException if the ticket does not exist
+     * @throws TicketExpiredException  if the ticket has expired
+     */
     @Transactional(readOnly = true)
     public void validate(String code) {
         RegistrationTicket ticket = registrationTicketRepository.findByCode(code)

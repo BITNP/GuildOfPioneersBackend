@@ -26,6 +26,9 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Unit tests for {@link RegistrationTicketService}.
+ */
 @ExtendWith(MockitoExtension.class)
 class RegistrationTicketServiceTest {
 

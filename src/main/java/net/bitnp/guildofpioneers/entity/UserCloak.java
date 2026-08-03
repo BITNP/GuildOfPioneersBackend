@@ -10,6 +10,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Represents the cloak identifier assigned to a user.
+ */
 @Entity
 @Table(name = "user_cloaks")
 @Getter

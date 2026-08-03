@@ -12,6 +12,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+/**
+ * Handles user registration, profile retrieval, and avatar updates.
+ */
 @Service
 public class AuthService {
 
@@ -32,6 +35,15 @@ public class AuthService {
         this.fileStorageService = fileStorageService;
     }
 
+    /**
+     * Registers a new user after validating the provided registration ticket.
+     *
+     * @param request the validated registration data
+     * @return the created user
+     * @throws TicketExpiredException   if the ticket has expired
+     * @throws TicketNotFoundException  if the ticket does not exist
+     * @throws PhoneAlreadyExistsException if the phone number is already registered
+     */
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         registrationTicketService.validate(request.getTicketCode());
@@ -47,10 +59,23 @@ public class AuthService {
         return toResponse(userRepository.save(user));
     }
 
+    /**
+     * Returns the profile of the currently authenticated user.
+     *
+     * @param authentication the current authentication
+     * @return the current user's profile
+     */
     public AuthResponse getCurrentUser(Authentication authentication) {
         return toResponse(findByAuthentication(authentication));
     }
 
+    /**
+     * Replaces the authenticated user's avatar with the uploaded file.
+     *
+     * @param authentication the current authentication
+     * @param file           the new avatar image
+     * @return the updated user profile
+     */
     @Transactional
     public AuthResponse updateAvatar(Authentication authentication, MultipartFile file) {
         User user = findByAuthentication(authentication);

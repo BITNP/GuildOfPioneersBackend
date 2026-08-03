@@ -12,6 +12,9 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * Unit tests for {@link FileStorageService}.
+ */
 class FileStorageServiceTest {
 
     @TempDir

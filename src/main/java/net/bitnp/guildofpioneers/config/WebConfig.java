@@ -8,6 +8,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+/**
+ * Configures static resource handling for uploaded files.
+ */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 

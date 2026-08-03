@@ -8,6 +8,9 @@ import lombok.Setter;
 
 import java.time.Instant;
 
+/**
+ * Response body describing a registration ticket.
+ */
 @Getter
 @Setter
 @Builder

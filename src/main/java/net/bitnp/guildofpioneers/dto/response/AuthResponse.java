@@ -6,6 +6,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Response body describing the current authenticated user.
+ */
 @Getter
 @Setter
 @Builder

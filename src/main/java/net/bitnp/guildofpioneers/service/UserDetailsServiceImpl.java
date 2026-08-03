@@ -9,6 +9,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * Loads user accounts for Spring Security authentication.
+ */
 @Service
 public class UserDetailsServiceImpl implements UserDetailsService {
 
@@ -18,6 +21,13 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         this.userRepository = userRepository;
     }
 
+    /**
+     * Loads the user for the given phone number as a Spring Security principal.
+     *
+     * @param phone the phone number of the user to load
+     * @return a UserDetails built from the persisted user
+     * @throws UsernameNotFoundException if no user matches the phone number
+     */
     @Override
     public UserDetails loadUserByUsername(String phone) throws UsernameNotFoundException {
         User user = userRepository.findByPhone(phone)

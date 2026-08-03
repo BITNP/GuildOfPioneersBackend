@@ -15,6 +15,9 @@ import lombok.Setter;
 
 import java.time.Instant;
 
+/**
+ * Represents a one-time registration ticket used to sign up new users.
+ */
 @Entity
 @Table(name = "registration_tickets")
 @Getter

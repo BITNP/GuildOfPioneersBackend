@@ -15,6 +15,9 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * Centralized exception handling that maps thrown exceptions to JSON error responses.
+ */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 

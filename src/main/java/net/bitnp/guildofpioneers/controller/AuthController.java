@@ -24,6 +24,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Authentication endpoints for registration, login, profile retrieval, and avatar upload.
+ */
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -48,6 +51,14 @@ public class AuthController {
         return authService.register(request);
     }
 
+    /**
+     * Authenticates a user and stores the session.
+     *
+     * @param request      the login credentials
+     * @param httpRequest  the servlet request used for session storage
+     * @param httpResponse the servlet response used for session storage
+     * @return the authenticated user profile
+     */
     @PostMapping("/login")
     public AuthResponse login(
             @Valid @RequestBody LoginRequest request,

@@ -1,5 +1,8 @@
 package net.bitnp.guildofpioneers.exception;
 
+/**
+ * Thrown when attempting to register a phone number that is already in use.
+ */
 public class PhoneAlreadyExistsException extends RuntimeException {
 
     public PhoneAlreadyExistsException(String phone) {

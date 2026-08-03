@@ -26,6 +26,9 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Unit tests for {@link AuthService}.
+ */
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 

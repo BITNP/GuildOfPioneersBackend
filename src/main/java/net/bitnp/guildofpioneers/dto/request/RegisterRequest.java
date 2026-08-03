@@ -9,6 +9,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Request body for new user registration.
+ */
 @Getter
 @Setter
 @Builder

@@ -10,6 +10,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Represents the department associated with a user.
+ */
 @Entity
 @Table(name = "user_departments")
 @Getter

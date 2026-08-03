@@ -23,6 +23,9 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * Configures Spring Security beans and the HTTP security filter chain.
+ */
 @Configuration
 public class SecurityConfig {
 
@@ -41,6 +44,14 @@ public class SecurityConfig {
         return new HttpSessionSecurityContextRepository();
     }
 
+    /**
+     * Builds the security filter chain, permitting login, registration, and static uploads
+     * while requiring authentication for all other requests.
+     *
+     * @param http         the HTTP security builder
+     * @param objectMapper the Jackson mapper used for the unauthorized entry point body
+     * @return the configured security filter chain
+     */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper objectMapper) throws Exception {
         AuthenticationEntryPoint unauthorizedEntryPoint = (request, response, ex) -> {

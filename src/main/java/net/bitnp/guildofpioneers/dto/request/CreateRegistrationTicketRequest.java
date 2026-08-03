@@ -10,6 +10,9 @@ import lombok.Setter;
 
 import java.time.Instant;
 
+/**
+ * Request body for creating a new registration ticket.
+ */
 @Getter
 @Setter
 @Builder

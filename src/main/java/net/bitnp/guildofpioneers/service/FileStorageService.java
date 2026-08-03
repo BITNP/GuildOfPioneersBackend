@@ -13,6 +13,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
 
+/**
+ * Stores and deletes user avatar files on the local filesystem.
+ */
 @Service
 public class FileStorageService {
 
@@ -34,6 +37,14 @@ public class FileStorageService {
         this.uploadDir = Paths.get(uploadDir).toAbsolutePath().normalize();
     }
 
+    /**
+     * Stores an avatar image for a user and returns its public URL.
+     *
+     * @param file   the uploaded avatar image
+     * @param userId the owning user's id
+     * @return the public URL of the stored avatar
+     * @throws InvalidFileTypeException if the file is empty or not a supported image type
+     */
     public String storeAvatar(MultipartFile file, Long userId) {
         if (file == null || file.isEmpty()) {
             throw new InvalidFileTypeException("Avatar file is required");
@@ -54,6 +65,11 @@ public class FileStorageService {
         }
     }
 
+    /**
+     * Deletes the avatar file referenced by the given public URL.
+     *
+     * @param avatarUrl the public URL of the avatar to delete, may be null
+     */
     public void deleteAvatar(String avatarUrl) {
         Path file = toFilePath(avatarUrl);
         if (file == null) {
@@ -67,6 +83,12 @@ public class FileStorageService {
         }
     }
 
+    /**
+     * Returns a cache-busting version for the avatar at the given URL.
+     *
+     * @param avatarUrl the public URL of the avatar, may be null
+     * @return the last-modified timestamp of the file, or null if unavailable
+     */
     public Long getVersion(String avatarUrl) {
         Path file = toFilePath(avatarUrl);
         if (file == null || !Files.exists(file)) {

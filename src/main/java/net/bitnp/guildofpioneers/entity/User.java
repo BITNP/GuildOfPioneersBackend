@@ -14,6 +14,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Represents a registered user of the platform.
+ */
 @Entity
 @Table(name = "users")
 @Getter
