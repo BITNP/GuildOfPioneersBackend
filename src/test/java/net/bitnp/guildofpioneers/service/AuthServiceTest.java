@@ -3,8 +3,10 @@ package net.bitnp.guildofpioneers.service;
 import net.bitnp.guildofpioneers.dto.request.RegisterRequest;
 import net.bitnp.guildofpioneers.dto.response.AuthResponse;
 import net.bitnp.guildofpioneers.entity.User;
+import net.bitnp.guildofpioneers.entity.UserDepartment;
 import net.bitnp.guildofpioneers.exception.PhoneAlreadyExistsException;
 import net.bitnp.guildofpioneers.exception.TicketExpiredException;
+import net.bitnp.guildofpioneers.repository.UserDepartmentRepository;
 import net.bitnp.guildofpioneers.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +45,9 @@ class AuthServiceTest {
 
     @Mock
     private FileStorageService fileStorageService;
+
+    @Mock
+    private UserDepartmentRepository userDepartmentRepository;
 
     @InjectMocks
     private AuthService authService;
@@ -104,6 +109,44 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.register(request))
                 .isInstanceOf(TicketExpiredException.class);
+    }
+
+    @Test
+    void getCurrentUser_returnsProfileWithDepartment() {
+        Authentication authentication = new TestingAuthenticationToken("13800000000", null);
+        User user = User.builder()
+                .id(7L)
+                .userName("Alice")
+                .phone("13800000000")
+                .password("encoded-hash")
+                .build();
+        when(userRepository.findByPhone("13800000000")).thenReturn(Optional.of(user));
+        when(userDepartmentRepository.findById(7L)).thenReturn(
+                Optional.of(UserDepartment.builder().userId(7L).department("Technology").build())
+        );
+
+        AuthResponse response = authService.getCurrentUser(authentication);
+
+        assertThat(response.getId()).isEqualTo(7L);
+        assertThat(response.getUserName()).isEqualTo("Alice");
+        assertThat(response.getDepartment()).isEqualTo("Technology");
+    }
+
+    @Test
+    void getCurrentUser_returnsNullDepartmentWhenNotAssigned() {
+        Authentication authentication = new TestingAuthenticationToken("13800000000", null);
+        User user = User.builder()
+                .id(7L)
+                .userName("Alice")
+                .phone("13800000000")
+                .password("encoded-hash")
+                .build();
+        when(userRepository.findByPhone("13800000000")).thenReturn(Optional.of(user));
+        when(userDepartmentRepository.findById(7L)).thenReturn(Optional.empty());
+
+        AuthResponse response = authService.getCurrentUser(authentication);
+
+        assertThat(response.getDepartment()).isNull();
     }
 
     @Test

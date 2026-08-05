@@ -21,4 +21,5 @@ public class AuthResponse {
     private String avatar;
     private String phone;
     private String email;
+    private String department;
 }

@@ -22,4 +22,9 @@ public class LoginRequest {
 
     @NotBlank
     private String password;
+
+    /**
+     * Whether the session should persist across browser restarts.
+     */
+    private Boolean rememberMe;
 }

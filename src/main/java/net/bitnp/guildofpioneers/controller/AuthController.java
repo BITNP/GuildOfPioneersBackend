@@ -1,7 +1,9 @@
 package net.bitnp.guildofpioneers.controller;
 
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import net.bitnp.guildofpioneers.dto.request.LoginRequest;
@@ -33,6 +35,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/auth")
 public class AuthController {
 
+    private static final int REMEMBER_ME_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+    private static final int REMEMBER_ME_SESSION_TIMEOUT_SECONDS = REMEMBER_ME_MAX_AGE_SECONDS;
+
     private final AuthService authService;
     private final AuthenticationManager authenticationManager;
     private final SecurityContextRepository securityContextRepository;
@@ -54,7 +59,9 @@ public class AuthController {
     }
 
     /**
-     * Authenticates a user and stores the session.
+     * Authenticates a user and stores the session. When {@code rememberMe} is set,
+     * the session and its cookie are extended to 30 days so that the user stays
+     * logged in across browser restarts.
      *
      * @param request      the login credentials
      * @param httpRequest  the servlet request used for session storage
@@ -74,6 +81,11 @@ public class AuthController {
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
         securityContextRepository.saveContext(context, httpRequest, httpResponse);
+        if (Boolean.TRUE.equals(request.getRememberMe())) {
+            HttpSession session = httpRequest.getSession();
+            session.setMaxInactiveInterval(REMEMBER_ME_SESSION_TIMEOUT_SECONDS);
+            httpResponse.addCookie(buildSessionCookie(session));
+        }
         log.trace("User {} logged in", request.getPhone());
         return authService.getCurrentUser(authentication);
     }
@@ -89,5 +101,26 @@ public class AuthController {
             @RequestParam("file") MultipartFile file
     ) {
         return authService.updateAvatar(authentication, file);
+    }
+
+    /**
+     * Builds a persistent copy of the session cookie so that the session
+     * survives a browser restart.
+     *
+     * @param session the session to remember
+     * @return the cookie to write on the response
+     */
+    private Cookie buildSessionCookie(HttpSession session) {
+        var cookieConfig = session.getServletContext().getSessionCookieConfig();
+        String name = cookieConfig.getName();
+        if (name == null || name.isEmpty()) {
+            name = "JSESSIONID";
+        }
+        Cookie cookie = new Cookie(name, session.getId());
+        cookie.setPath(cookieConfig.getPath() != null ? cookieConfig.getPath() : "/");
+        cookie.setMaxAge(REMEMBER_ME_MAX_AGE_SECONDS);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(cookieConfig.isSecure());
+        return cookie;
     }
 }

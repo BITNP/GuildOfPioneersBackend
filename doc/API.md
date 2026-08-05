@@ -115,11 +115,12 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `POST /api/auth/login`
 
-- **Description**: Authenticates a user by phone and password. On success, establishes a server-side session and returns a session cookie.
+- **Description**: Authenticates a user by phone and password. On success, establishes a server-side session and returns a session cookie. When `rememberMe` is `true`, the session and its cookie are extended to 30 days so the user stays logged in across browser restarts; otherwise the session cookie is browser-session-scoped.
 - **Authentication**: None.
 - **Request Body**: `LoginRequest`:
   - `phone` (string, required) - login identifier.
   - `password` (string, required) - plaintext password.
+  - `rememberMe` (boolean, optional, default `false`) - persist the session for 30 days instead of the current browser session.
 - **Path Parameters**: -
 - **Query Parameters**: -
 - **Success Response**:
@@ -166,7 +167,8 @@ Keep entries sorted by path, then by HTTP method.
       "userName": "Alice",
       "avatar": "/uploads/avatars/1.png?v=1720000000000",
       "phone": "13800000000",
-      "email": "alice@example.com"
+      "email": "alice@example.com",
+      "department": "Technology"
     }
     ```
 - **Error Responses**:

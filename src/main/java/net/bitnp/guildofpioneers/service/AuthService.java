@@ -3,8 +3,10 @@ package net.bitnp.guildofpioneers.service;
 import net.bitnp.guildofpioneers.dto.request.RegisterRequest;
 import net.bitnp.guildofpioneers.dto.response.AuthResponse;
 import net.bitnp.guildofpioneers.entity.User;
+import net.bitnp.guildofpioneers.entity.UserDepartment;
 import net.bitnp.guildofpioneers.exception.PhoneAlreadyExistsException;
 import net.bitnp.guildofpioneers.exception.UserNotFoundException;
+import net.bitnp.guildofpioneers.repository.UserDepartmentRepository;
 import net.bitnp.guildofpioneers.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -24,17 +26,20 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final RegistrationTicketService registrationTicketService;
     private final FileStorageService fileStorageService;
+    private final UserDepartmentRepository userDepartmentRepository;
 
     public AuthService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             RegistrationTicketService registrationTicketService,
-            FileStorageService fileStorageService
+            FileStorageService fileStorageService,
+            UserDepartmentRepository userDepartmentRepository
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.registrationTicketService = registrationTicketService;
         this.fileStorageService = fileStorageService;
+        this.userDepartmentRepository = userDepartmentRepository;
     }
 
     /**
@@ -70,7 +75,13 @@ public class AuthService {
      * @return the current user's profile
      */
     public AuthResponse getCurrentUser(Authentication authentication) {
-        return toResponse(findByAuthentication(authentication));
+        User user = findByAuthentication(authentication);
+        String department = userDepartmentRepository.findById(user.getId())
+                .map(UserDepartment::getDepartment)
+                .orElse(null);
+        AuthResponse response = toResponse(user);
+        response.setDepartment(department);
+        return response;
     }
 
     /**
