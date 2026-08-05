@@ -23,6 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class AuthControllerIntegrationTest {
 
+    private static final String USERNAME = "Alice";
     private static final String PHONE = "13000000000";
     private static final String PASSWORD = "password123";
 
@@ -52,11 +53,11 @@ class AuthControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "phone": "%s",
+                                  "username": "%s",
                                   "password": "%s",
                                   "rememberMe": true
                                 }
-                                """.formatted(PHONE, PASSWORD)))
+                                """.formatted(USERNAME, PASSWORD)))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -72,10 +73,10 @@ class AuthControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "phone": "%s",
+                                  "username": "%s",
                                   "password": "%s"
                                 }
-                                """.formatted(PHONE, PASSWORD)))
+                                """.formatted(USERNAME, PASSWORD)))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -89,10 +90,10 @@ class AuthControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "phone": "%s",
+                                  "username": "%s",
                                   "password": "wrong-password"
                                 }
-                                """.formatted(PHONE)))
+                                """.formatted(USERNAME)))
                 .andExpect(status().isUnauthorized());
     }
 }

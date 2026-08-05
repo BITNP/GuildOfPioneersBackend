@@ -23,9 +23,9 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(PhoneAlreadyExistsException.class)
-    public ResponseEntity<Map<String, Object>> handlePhoneAlreadyExists(
-            PhoneAlreadyExistsException ex, HttpServletRequest request
+    @ExceptionHandler({PhoneAlreadyExistsException.class, UserNameAlreadyExistsException.class})
+    public ResponseEntity<Map<String, Object>> handleDuplicateRegistration(
+            RuntimeException ex, HttpServletRequest request
     ) {
         log.trace("Registration rejected: {}", ex.getMessage());
         return build(HttpStatus.CONFLICT, "CONFLICT", ex.getMessage(), request);

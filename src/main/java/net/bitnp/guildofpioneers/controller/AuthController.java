@@ -75,7 +75,7 @@ public class AuthController {
             HttpServletResponse httpResponse
     ) {
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getPhone(), request.getPassword())
+                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
         );
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
@@ -86,7 +86,7 @@ public class AuthController {
             session.setMaxInactiveInterval(REMEMBER_ME_SESSION_TIMEOUT_SECONDS);
             httpResponse.addCookie(buildSessionCookie(session));
         }
-        log.trace("User {} logged in", request.getPhone());
+        log.trace("User {} logged in", request.getUsername());
         return authService.getCurrentUser(authentication);
     }
 

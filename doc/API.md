@@ -90,7 +90,7 @@ Keep entries sorted by path, then by HTTP method.
 - **Description**: Registers a new user. A valid, non-expired registration ticket code is required. The password is stored as a BCrypt hash. A user has no avatar until one is uploaded via `PUT /api/auth/avatar`.
 - **Authentication**: None.
 - **Request Body**: `RegisterRequest`:
-  - `phone` (string, required) - login identifier.
+  - `phone` (string, required) - phone number.
   - `password` (string, required, min 8 chars) - plaintext password, hashed before storing.
   - `userName` (string, required) - display name.
   - `ticketCode` (string, required) - registration ticket code; must exist and not be expired.
@@ -115,10 +115,10 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `POST /api/auth/login`
 
-- **Description**: Authenticates a user by phone and password. On success, establishes a server-side session and returns a session cookie. When `rememberMe` is `true`, the session and its cookie are extended to 30 days so the user stays logged in across browser restarts; otherwise the session cookie is browser-session-scoped.
+- **Description**: Authenticates a user by username and password. The username lookup is case-insensitive. On success, establishes a server-side session and returns a session cookie. When `rememberMe` is `true`, the session and its cookie are extended to 30 days so the user stays logged in across browser restarts; otherwise the session cookie is browser-session-scoped.
 - **Authentication**: None.
 - **Request Body**: `LoginRequest`:
-  - `phone` (string, required) - login identifier.
+  - `username` (string, required) - login identifier.
   - `password` (string, required) - plaintext password.
   - `rememberMe` (boolean, optional, default `false`) - persist the session for 30 days instead of the current browser session.
 - **Path Parameters**: -
@@ -136,8 +136,8 @@ Keep entries sorted by path, then by HTTP method.
     }
     ```
 - **Error Responses**:
-  - `400 BAD_REQUEST` - missing phone or password.
-  - `401 UNAUTHORIZED` - invalid phone or password.
+  - `400 BAD_REQUEST` - missing username or password.
+  - `401 UNAUTHORIZED` - invalid username or password.
 
 ### `POST /api/auth/logout`
 

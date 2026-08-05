@@ -22,18 +22,19 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     }
 
     /**
-     * Loads the user for the given phone number as a Spring Security principal.
+     * Loads the user for the given username as a Spring Security principal.
+     * The lookup ignores case, so any casing of the username matches.
      *
-     * @param phone the phone number of the user to load
+     * @param username the username of the user to load
      * @return a UserDetails built from the persisted user
-     * @throws UsernameNotFoundException if no user matches the phone number
+     * @throws UsernameNotFoundException if no user matches the username
      */
     @Override
-    public UserDetails loadUserByUsername(String phone) throws UsernameNotFoundException {
-        User user = userRepository.findByPhone(phone)
-                .orElseThrow(() -> new UsernameNotFoundException("User with phone " + phone + " not found"));
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        User user = userRepository.findByUserNameIgnoreCase(username)
+                .orElseThrow(() -> new UsernameNotFoundException("User with username " + username + " not found"));
         return org.springframework.security.core.userdetails.User
-                .withUsername(user.getPhone())
+                .withUsername(user.getUserName())
                 .password(user.getPassword())
                 .authorities(List.of(() -> "ROLE_USER"))
                 .build();

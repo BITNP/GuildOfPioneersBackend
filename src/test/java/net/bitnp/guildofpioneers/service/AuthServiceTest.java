@@ -6,6 +6,7 @@ import net.bitnp.guildofpioneers.entity.User;
 import net.bitnp.guildofpioneers.entity.UserDepartment;
 import net.bitnp.guildofpioneers.exception.PhoneAlreadyExistsException;
 import net.bitnp.guildofpioneers.exception.TicketExpiredException;
+import net.bitnp.guildofpioneers.exception.UserNameAlreadyExistsException;
 import net.bitnp.guildofpioneers.repository.UserDepartmentRepository;
 import net.bitnp.guildofpioneers.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -96,6 +97,21 @@ class AuthServiceTest {
     }
 
     @Test
+    void register_rejectsDuplicateUserName() {
+        when(userRepository.existsByUserNameIgnoreCase("Alice")).thenReturn(true);
+
+        RegisterRequest request = RegisterRequest.builder()
+                .phone("13900000000")
+                .password("secret123")
+                .userName("Alice")
+                .ticketCode("VALIDCODE123")
+                .build();
+
+        assertThatThrownBy(() -> authService.register(request))
+                .isInstanceOf(UserNameAlreadyExistsException.class);
+    }
+
+    @Test
     void register_rejectsExpiredTicket() {
         doThrow(new TicketExpiredException("EXPIRED123")).when(registrationTicketService)
                 .validate("EXPIRED123");
@@ -113,14 +129,14 @@ class AuthServiceTest {
 
     @Test
     void getCurrentUser_returnsProfileWithDepartment() {
-        Authentication authentication = new TestingAuthenticationToken("13800000000", null);
+        Authentication authentication = new TestingAuthenticationToken("Alice", null);
         User user = User.builder()
                 .id(7L)
                 .userName("Alice")
                 .phone("13800000000")
                 .password("encoded-hash")
                 .build();
-        when(userRepository.findByPhone("13800000000")).thenReturn(Optional.of(user));
+        when(userRepository.findByUserNameIgnoreCase("Alice")).thenReturn(Optional.of(user));
         when(userDepartmentRepository.findById(7L)).thenReturn(
                 Optional.of(UserDepartment.builder().userId(7L).department("Technology").build())
         );
@@ -134,14 +150,14 @@ class AuthServiceTest {
 
     @Test
     void getCurrentUser_returnsNullDepartmentWhenNotAssigned() {
-        Authentication authentication = new TestingAuthenticationToken("13800000000", null);
+        Authentication authentication = new TestingAuthenticationToken("Alice", null);
         User user = User.builder()
                 .id(7L)
                 .userName("Alice")
                 .phone("13800000000")
                 .password("encoded-hash")
                 .build();
-        when(userRepository.findByPhone("13800000000")).thenReturn(Optional.of(user));
+        when(userRepository.findByUserNameIgnoreCase("Alice")).thenReturn(Optional.of(user));
         when(userDepartmentRepository.findById(7L)).thenReturn(Optional.empty());
 
         AuthResponse response = authService.getCurrentUser(authentication);
@@ -151,7 +167,7 @@ class AuthServiceTest {
 
     @Test
     void updateAvatar_storesFileDeletesOldAndSavesUser() {
-        Authentication authentication = new TestingAuthenticationToken("13800000000", null);
+        Authentication authentication = new TestingAuthenticationToken("Alice", null);
         User user = User.builder()
                 .id(42L)
                 .userName("Alice")
@@ -159,7 +175,7 @@ class AuthServiceTest {
                 .phone("13800000000")
                 .password("encoded-hash")
                 .build();
-        when(userRepository.findByPhone("13800000000")).thenReturn(Optional.of(user));
+        when(userRepository.findByUserNameIgnoreCase("Alice")).thenReturn(Optional.of(user));
         when(userRepository.save(user)).thenReturn(user);
         when(fileStorageService.storeAvatar(any(), org.mockito.ArgumentMatchers.eq(42L)))
                 .thenReturn("/uploads/avatars/42.jpg");

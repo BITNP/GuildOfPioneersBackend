@@ -5,6 +5,7 @@ import net.bitnp.guildofpioneers.dto.response.AuthResponse;
 import net.bitnp.guildofpioneers.entity.User;
 import net.bitnp.guildofpioneers.entity.UserDepartment;
 import net.bitnp.guildofpioneers.exception.PhoneAlreadyExistsException;
+import net.bitnp.guildofpioneers.exception.UserNameAlreadyExistsException;
 import net.bitnp.guildofpioneers.exception.UserNotFoundException;
 import net.bitnp.guildofpioneers.repository.UserDepartmentRepository;
 import net.bitnp.guildofpioneers.repository.UserRepository;
@@ -50,12 +51,16 @@ public class AuthService {
      * @throws TicketExpiredException   if the ticket has expired
      * @throws TicketNotFoundException  if the ticket does not exist
      * @throws PhoneAlreadyExistsException if the phone number is already registered
+     * @throws UserNameAlreadyExistsException if the username is already registered
      */
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         registrationTicketService.validate(request.getTicketCode());
         if (userRepository.existsByPhone(request.getPhone())) {
             throw new PhoneAlreadyExistsException(request.getPhone());
+        }
+        if (userRepository.existsByUserNameIgnoreCase(request.getUserName())) {
+            throw new UserNameAlreadyExistsException(request.getUserName());
         }
         User user = User.builder()
                 .userName(request.getUserName())
@@ -103,9 +108,9 @@ public class AuthService {
     }
 
     private User findByAuthentication(Authentication authentication) {
-        String phone = authentication.getName();
-        return userRepository.findByPhone(phone)
-                .orElseThrow(() -> new UserNotFoundException(phone));
+        String username = authentication.getName();
+        return userRepository.findByUserNameIgnoreCase(username)
+                .orElseThrow(() -> new UserNotFoundException(username));
     }
 
     private AuthResponse toResponse(User user) {

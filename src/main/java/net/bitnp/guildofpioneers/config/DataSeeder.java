@@ -99,11 +99,12 @@ public class DataSeeder implements ApplicationRunner {
 
     private List<User> seedUsers() {
         Set<String> phones = new HashSet<>();
+        Set<String> userNames = new HashSet<>();
         List<User> users = new ArrayList<>();
         int studentCount = 0;
         int cloakCount = 0;
         for (int i = 0; i < USER_COUNT; i++) {
-            String name = NAMES[random.nextInt(NAMES.length)];
+            String name = generateUniqueUserName(userNames);
             User user = userRepository.save(User.builder()
                     .userName(name)
                     .phone(generateUniquePhone(phones))
@@ -157,6 +158,16 @@ public class DataSeeder implements ApplicationRunner {
             phone = "1" + randomChar(PHONE_PREFIX_DIGITS) + randomDigits(9);
         } while (!phones.add(phone));
         return phone;
+    }
+
+    private String generateUniqueUserName(Set<String> userNames) {
+        String name = NAMES[random.nextInt(NAMES.length)];
+        String uniqueName = name;
+        int suffix = 1;
+        while (!userNames.add(uniqueName)) {
+            uniqueName = name + suffix++;
+        }
+        return uniqueName;
     }
 
     private String generateStudentId() {
