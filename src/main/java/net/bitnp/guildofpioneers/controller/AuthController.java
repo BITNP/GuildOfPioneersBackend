@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import net.bitnp.guildofpioneers.dto.request.LoginRequest;
 import net.bitnp.guildofpioneers.dto.request.RegisterRequest;
+import net.bitnp.guildofpioneers.dto.request.UpdateProfileRequest;
 import net.bitnp.guildofpioneers.dto.response.AuthResponse;
 import net.bitnp.guildofpioneers.service.AuthService;
 import org.springframework.http.HttpStatus;
@@ -101,6 +102,22 @@ public class AuthController {
             @RequestParam("file") MultipartFile file
     ) {
         return authService.updateAvatar(authentication, file);
+    }
+
+    /**
+     * Updates the authenticated user's phone and email. The username is not editable.
+     *
+     * @param request        the validated profile data
+     * @param authentication the current authentication
+     * @return the updated user profile
+     */
+    @PutMapping("/profile")
+    public AuthResponse updateProfile(
+            @Valid @RequestBody UpdateProfileRequest request,
+            Authentication authentication
+    ) {
+        log.trace("User {} updated their profile", authentication.getName());
+        return authService.updateProfile(authentication, request);
     }
 
     /**

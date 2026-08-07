@@ -11,9 +11,13 @@ import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.mock.web.MockHttpSession;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -95,5 +99,39 @@ class AuthControllerIntegrationTest {
                                 }
                                 """.formatted(USERNAME)))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void updateProfile_changesPhoneAndEmailAndMeReturnsThem() throws Exception {
+        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "%s",
+                                  "password": "%s"
+                                }
+                                """.formatted(USERNAME, PASSWORD)))
+                .andExpect(status().isOk())
+                .andReturn();
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession();
+
+        mockMvc.perform(put("/api/auth/profile")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "phone": "13900000000",
+                                  "email": "new@example.com"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.phone").value("13900000000"))
+                .andExpect(jsonPath("$.email").value("new@example.com"));
+
+        mockMvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userName").value(USERNAME))
+                .andExpect(jsonPath("$.phone").value("13900000000"))
+                .andExpect(jsonPath("$.email").value("new@example.com"));
     }
 }

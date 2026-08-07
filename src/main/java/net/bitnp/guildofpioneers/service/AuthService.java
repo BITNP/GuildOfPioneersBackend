@@ -1,6 +1,7 @@
 package net.bitnp.guildofpioneers.service;
 
 import net.bitnp.guildofpioneers.dto.request.RegisterRequest;
+import net.bitnp.guildofpioneers.dto.request.UpdateProfileRequest;
 import net.bitnp.guildofpioneers.dto.response.AuthResponse;
 import net.bitnp.guildofpioneers.entity.User;
 import net.bitnp.guildofpioneers.entity.UserDepartment;
@@ -65,7 +66,7 @@ public class AuthService {
         User user = User.builder()
                 .userName(request.getUserName())
                 .phone(request.getPhone())
-                .email(request.getEmail())
+                .email(blankToNull(request.getEmail()))
                 .password(passwordEncoder.encode(request.getPassword()))
                 .build();
         User saved = userRepository.save(user);
@@ -107,6 +108,28 @@ public class AuthService {
         return response;
     }
 
+    /**
+     * Updates the authenticated user's phone and email. The username is not editable.
+     * A phone already owned by the user is allowed unchanged; only a genuinely new
+     * value is checked for uniqueness.
+     *
+     * @param authentication the current authentication
+     * @param request        the validated profile data
+     * @return the updated user profile
+     * @throws PhoneAlreadyExistsException if the new phone belongs to another user
+     */
+    @Transactional
+    public AuthResponse updateProfile(Authentication authentication, UpdateProfileRequest request) {
+        User user = findByAuthentication(authentication);
+        if (!request.getPhone().equals(user.getPhone()) && userRepository.existsByPhone(request.getPhone())) {
+            throw new PhoneAlreadyExistsException(request.getPhone());
+        }
+        user.setPhone(request.getPhone());
+        user.setEmail(blankToNull(request.getEmail()));
+        log.trace("User {} updated their profile", user.getId());
+        return toResponse(userRepository.save(user));
+    }
+
     private User findByAuthentication(Authentication authentication) {
         String username = authentication.getName();
         return userRepository.findByUserNameIgnoreCase(username)
@@ -126,5 +149,9 @@ public class AuthService {
     private String withVersion(String avatar) {
         Long version = fileStorageService.getVersion(avatar);
         return version != null ? avatar + "?v=" + version : avatar;
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 }

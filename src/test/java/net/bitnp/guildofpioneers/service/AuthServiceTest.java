@@ -1,6 +1,7 @@
 package net.bitnp.guildofpioneers.service;
 
 import net.bitnp.guildofpioneers.dto.request.RegisterRequest;
+import net.bitnp.guildofpioneers.dto.request.UpdateProfileRequest;
 import net.bitnp.guildofpioneers.dto.response.AuthResponse;
 import net.bitnp.guildofpioneers.entity.User;
 import net.bitnp.guildofpioneers.entity.UserDepartment;
@@ -190,5 +191,98 @@ class AuthServiceTest {
         verify(userRepository).save(user);
         assertThat(user.getAvatar()).isEqualTo("/uploads/avatars/42.jpg");
         assertThat(response.getAvatar()).isEqualTo("/uploads/avatars/42.jpg?v=1720000000000");
+    }
+
+    @Test
+    void updateProfile_updatesFieldsAndReturnsResponse() {
+        Authentication authentication = new TestingAuthenticationToken("Alice", null);
+        User user = User.builder()
+                .id(7L)
+                .userName("Alice")
+                .phone("13800000000")
+                .email("alice@example.com")
+                .password("encoded-hash")
+                .build();
+        when(userRepository.findByUserNameIgnoreCase("Alice")).thenReturn(Optional.of(user));
+        when(userRepository.save(user)).thenReturn(user);
+
+        UpdateProfileRequest request = UpdateProfileRequest.builder()
+                .phone("13900000000")
+                .email("new@example.com")
+                .build();
+
+        AuthResponse response = authService.updateProfile(authentication, request);
+
+        assertThat(user.getUserName()).isEqualTo("Alice");
+        assertThat(user.getPhone()).isEqualTo("13900000000");
+        assertThat(user.getEmail()).isEqualTo("new@example.com");
+        assertThat(response.getUserName()).isEqualTo("Alice");
+        assertThat(response.getPhone()).isEqualTo("13900000000");
+        assertThat(response.getEmail()).isEqualTo("new@example.com");
+    }
+
+    @Test
+    void updateProfile_allowsUnchangedOwnPhone() {
+        Authentication authentication = new TestingAuthenticationToken("Alice", null);
+        User user = User.builder()
+                .id(7L)
+                .userName("Alice")
+                .phone("13800000000")
+                .password("encoded-hash")
+                .build();
+        when(userRepository.findByUserNameIgnoreCase("Alice")).thenReturn(Optional.of(user));
+        when(userRepository.save(user)).thenReturn(user);
+
+        UpdateProfileRequest request = UpdateProfileRequest.builder()
+                .phone("13800000000")
+                .build();
+
+        authService.updateProfile(authentication, request);
+
+        verify(userRepository, org.mockito.Mockito.never()).existsByPhone("13800000000");
+        assertThat(user.getPhone()).isEqualTo("13800000000");
+    }
+
+    @Test
+    void updateProfile_rejectsPhoneUsedByAnotherUser() {
+        Authentication authentication = new TestingAuthenticationToken("Alice", null);
+        User user = User.builder()
+                .id(7L)
+                .userName("Alice")
+                .phone("13800000000")
+                .password("encoded-hash")
+                .build();
+        when(userRepository.findByUserNameIgnoreCase("Alice")).thenReturn(Optional.of(user));
+        when(userRepository.existsByPhone("13900000000")).thenReturn(true);
+
+        UpdateProfileRequest request = UpdateProfileRequest.builder()
+                .phone("13900000000")
+                .build();
+
+        assertThatThrownBy(() -> authService.updateProfile(authentication, request))
+                .isInstanceOf(PhoneAlreadyExistsException.class);
+    }
+
+    @Test
+    void updateProfile_clearsBlankEmail() {
+        Authentication authentication = new TestingAuthenticationToken("Alice", null);
+        User user = User.builder()
+                .id(7L)
+                .userName("Alice")
+                .phone("13800000000")
+                .email("alice@example.com")
+                .password("encoded-hash")
+                .build();
+        when(userRepository.findByUserNameIgnoreCase("Alice")).thenReturn(Optional.of(user));
+        when(userRepository.save(user)).thenReturn(user);
+
+        UpdateProfileRequest request = UpdateProfileRequest.builder()
+                .phone("13800000000")
+                .email("")
+                .build();
+
+        authService.updateProfile(authentication, request);
+
+        assertThat(user.getEmail()).isNull();
     }
 }

@@ -90,7 +90,7 @@ Keep entries sorted by path, then by HTTP method.
 - **Description**: Registers a new user. A valid, non-expired registration ticket code is required. The password is stored as a BCrypt hash. A user has no avatar until one is uploaded via `PUT /api/auth/avatar`.
 - **Authentication**: None.
 - **Request Body**: `RegisterRequest`:
-  - `phone` (string, required) - phone number.
+  - `phone` (string, required) - phone number; must be a Chinese mobile number (`1[3-9]` followed by 9 digits).
   - `password` (string, required, min 8 chars) - plaintext password, hashed before storing.
   - `userName` (string, required) - display name.
   - `ticketCode` (string, required) - registration ticket code; must exist and not be expired.
@@ -110,7 +110,7 @@ Keep entries sorted by path, then by HTTP method.
     }
     ```
 - **Error Responses**:
-  - `400 BAD_REQUEST` - validation failed, invalid email, unknown ticket code, or expired ticket code.
+  - `400 BAD_REQUEST` - validation failed (e.g. invalid phone format, invalid email, short password), unknown ticket code, or expired ticket code.
   - `409 CONFLICT` - phone is already registered.
 
 ### `POST /api/auth/login`
@@ -173,6 +173,32 @@ Keep entries sorted by path, then by HTTP method.
     ```
 - **Error Responses**:
   - `401 UNAUTHORIZED` - not authenticated.
+
+### `PUT /api/auth/profile`
+
+- **Description**: Updates the authenticated user's phone and email. The username is not editable.
+- **Authentication**: Authenticated session.
+- **Request Body**: `UpdateProfileRequest`:
+  - `phone` (string, required) - phone number; must be a Chinese mobile number (`1[3-9]` followed by 9 digits).
+  - `email` (string, optional) - must be a valid email when provided; may be `null` or empty to clear it.
+- **Path Parameters**: -
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**:
+    ```json
+    {
+      "id": 1,
+      "userName": "Alice",
+      "avatar": "/uploads/avatars/1.png?v=1720000000000",
+      "phone": "13800000000",
+      "email": "alice@example.com"
+    }
+    ```
+- **Error Responses**:
+  - `400 BAD_REQUEST` - validation failed (e.g. invalid phone format or invalid email).
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `409 CONFLICT` - phone is already registered to another user.
 
 ### `PUT /api/auth/avatar`
 

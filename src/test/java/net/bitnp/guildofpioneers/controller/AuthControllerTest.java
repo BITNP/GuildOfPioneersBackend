@@ -15,8 +15,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -69,5 +73,112 @@ class AuthControllerTest {
                     return request;
                 }))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(username = "Alice")
+    void updateProfile_returnsUpdatedUser() throws Exception {
+        when(authService.updateProfile(any(Authentication.class), any()))
+                .thenReturn(AuthResponse.builder()
+                        .id(7L)
+                        .userName("Alice")
+                        .phone("13900000000")
+                        .email("new@example.com")
+                        .build());
+
+        mockMvc.perform(put("/api/auth/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "phone": "13900000000",
+                                  "email": "new@example.com"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.id").value(7))
+                .andExpect(jsonPath("$.userName").value("Alice"))
+                .andExpect(jsonPath("$.phone").value("13900000000"))
+                .andExpect(jsonPath("$.email").value("new@example.com"));
+    }
+
+    @Test
+    void updateProfile_requiresAuthentication() throws Exception {
+        mockMvc.perform(put("/api/auth/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "phone": "13800000000"
+                                }
+                                """))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void register_rejectsInvalidPhone() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "phone": "12345",
+                                  "password": "password123",
+                                  "userName": "Alice",
+                                  "ticketCode": "VALIDCODE123",
+                                  "email": "alice@example.com"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("phone must be a valid Chinese mobile number"));
+        verify(authService, never()).register(any());
+    }
+
+    @Test
+    void register_rejectsInvalidEmail() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "phone": "13800000000",
+                                  "password": "password123",
+                                  "userName": "Alice",
+                                  "ticketCode": "VALIDCODE123",
+                                  "email": "not-an-email"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("email must be a valid email address"));
+        verify(authService, never()).register(any());
+    }
+
+    @Test
+    @WithMockUser(username = "Alice")
+    void updateProfile_rejectsInvalidPhone() throws Exception {
+        mockMvc.perform(put("/api/auth/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "phone": "12345",
+                                  "email": "alice@example.com"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("phone must be a valid Chinese mobile number"));
+        verify(authService, never()).updateProfile(any(), any());
+    }
+
+    @Test
+    @WithMockUser(username = "Alice")
+    void updateProfile_rejectsInvalidEmail() throws Exception {
+        mockMvc.perform(put("/api/auth/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "phone": "13800000000",
+                                  "email": "not-an-email"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("email must be a valid email address"));
+        verify(authService, never()).updateProfile(any(), any());
     }
 }
