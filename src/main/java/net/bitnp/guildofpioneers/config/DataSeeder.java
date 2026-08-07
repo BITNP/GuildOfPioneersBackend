@@ -1,16 +1,16 @@
 package net.bitnp.guildofpioneers.config;
 
 import lombok.extern.slf4j.Slf4j;
-import net.bitnp.guildofpioneers.entity.RegistrationTicket;
-import net.bitnp.guildofpioneers.entity.User;
-import net.bitnp.guildofpioneers.entity.UserCloak;
-import net.bitnp.guildofpioneers.entity.UserDepartment;
-import net.bitnp.guildofpioneers.entity.UserStudent;
-import net.bitnp.guildofpioneers.repository.RegistrationTicketRepository;
-import net.bitnp.guildofpioneers.repository.UserCloakRepository;
-import net.bitnp.guildofpioneers.repository.UserDepartmentRepository;
-import net.bitnp.guildofpioneers.repository.UserRepository;
-import net.bitnp.guildofpioneers.repository.UserStudentRepository;
+import net.bitnp.guildofpioneers.ticket.RegistrationTicket;
+import net.bitnp.guildofpioneers.user.entity.User;
+import net.bitnp.guildofpioneers.user.entity.UserCloak;
+import net.bitnp.guildofpioneers.user.entity.UserDepartment;
+import net.bitnp.guildofpioneers.user.entity.UserStudent;
+import net.bitnp.guildofpioneers.ticket.RegistrationTicketRepository;
+import net.bitnp.guildofpioneers.user.repository.UserCloakRepository;
+import net.bitnp.guildofpioneers.user.repository.UserDepartmentRepository;
+import net.bitnp.guildofpioneers.user.repository.UserRepository;
+import net.bitnp.guildofpioneers.user.repository.UserStudentRepository;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

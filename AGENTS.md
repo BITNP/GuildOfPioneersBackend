@@ -29,7 +29,7 @@ Before adding a new dependency, consider whether the functionality can be implem
 
 # Architecture
 
-Use a layered architecture:
+Use a layered architecture within each feature module:
 
 ```
 
@@ -43,22 +43,47 @@ Database
 
 ```
 
+Packages are organized by feature module, not by layer. Each module groups its
+controllers, services, repositories, entities, DTOs, and module-specific exceptions
+together. Within a module, keep files flat at the module root unless a type reaches
+3 or more files in that module — then sub-divide that type into its own sub-package
+(e.g. `entity/`, `repository/`, `exception/`).
+
 Recommended package structure:
 
 ```
 
-com.example.project
+net.bitnp.guildofpioneers
 
-├── controller
-├── service
-├── repository
-├── entity
-├── dto
-│   ├── request
-│   └── response
-├── exception
-├── config
-└── util
+├── auth            (registration, login, session)
+│   ├── AuthController
+│   ├── AuthService
+│   ├── LoginRequest
+│   └── RegisterRequest
+├── user            (user accounts and profiles)
+│   ├── UserService
+│   ├── UserDetailsServiceImpl
+│   ├── AuthResponse
+│   ├── UpdateProfileRequest
+│   ├── entity
+│   ├── repository
+│   └── exception
+├── ticket          (registration tickets)
+│   ├── TicketController
+│   ├── RegistrationTicketService
+│   ├── RegistrationTicket
+│   ├── RegistrationTicketRepository
+│   ├── CreateRegistrationTicketRequest
+│   ├── RegistrationTicketResponse
+│   ├── TicketNotFoundException
+│   └── TicketExpiredException
+├── storage         (file storage infrastructure)
+│   ├── FileStorageService
+│   └── InvalidFileTypeException
+├── config          (application configuration and seeding)
+├── common          (cross-cutting concerns)
+│   └── GlobalExceptionHandler
+└── GuildOfPioneersBackendApplication
 
 ````
 
@@ -194,19 +219,16 @@ Never manually modify production databases.
 
 # DTO Rules
 
-Use separate DTO classes.
-
-Structure:
+Use separate DTO classes. DTOs live inside their feature module (not a global
+`dto` package). Name them by role:
 
 ```
-dto/
-
-├── request
-│   ├── CreateUserRequest
-│   └── UpdateUserRequest
-│
-└── response
-    └── UserResponse
+user/UpdateProfileRequest
+user/AuthResponse
+auth/RegisterRequest
+auth/LoginRequest
+ticket/CreateRegistrationTicketRequest
+ticket/RegistrationTicketResponse
 ```
 
 Do not expose internal database structures through APIs.
