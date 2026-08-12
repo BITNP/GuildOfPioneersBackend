@@ -225,15 +225,17 @@ Keep entries sorted by path, then by HTTP method.
   - `401 UNAUTHORIZED` - not authenticated.
   - `413 CONTENT_TOO_LARGE` - file exceeds the maximum allowed size.
 
-### `GET /uploads/avatars/{fileName}`
+### `GET /uploads/{namespace}/{fileName}`
 
-- **Description**: Serves a stored avatar image directly from the server's filesystem. Public, no authentication.
+- **Description**: Serves a stored file from the Veil storage layer via a controller so authorization can be applied later. The file name includes its extension, e.g. `GET /uploads/avatars/1.png` serves the avatar with key `1`. Public for the `avatars` namespace.
 - **Authentication**: None.
 - **Request Body**: -
-- **Path Parameters**: `fileName` (string) - avatar file name, e.g. `1.png`.
+- **Path Parameters**:
+  - `namespace` (string) - the storage namespace, e.g. `avatars`.
+  - `fileName` (string) - the stored file name including its extension, e.g. `1.png`.
 - **Query Parameters**: `v` (string, optional) - cache-busting version (the file's last-modified timestamp).
 - **Success Response**:
   - **Status**: `200 OK`
-  - **Body**: binary image bytes with the matching `Content-Type`.
+  - **Body**: binary file bytes with the matching `Content-Type`.
 - **Error Responses**:
-  - `404 NOT_FOUND` - no such file.
+  - `404 NOT_FOUND` - no such file or unknown namespace.

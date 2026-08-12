@@ -3,6 +3,7 @@ package net.bitnp.guildofpioneers.common;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import net.bitnp.guildofpioneers.storage.InvalidFileTypeException;
+import net.bitnp.guildofpioneers.storage.StoredFileNotFoundException;
 import net.bitnp.guildofpioneers.ticket.TicketExpiredException;
 import net.bitnp.guildofpioneers.ticket.TicketNotFoundException;
 import net.bitnp.guildofpioneers.user.exception.PhoneAlreadyExistsException;
@@ -70,6 +71,13 @@ public class GlobalExceptionHandler {
     ) {
         log.trace("Upload rejected: {}", ex.getMessage());
         return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(StoredFileNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleStoredFileNotFound(
+            StoredFileNotFoundException ex, HttpServletRequest request
+    ) {
+        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request);
     }
 
     @ExceptionHandler(MissingServletRequestPartException.class)
