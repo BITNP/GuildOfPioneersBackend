@@ -57,15 +57,11 @@ public class UserService {
      * @param file           the new avatar image
      * @return the updated user profile
      */
-    @Transactional
     public AuthResponse updateAvatar(Authentication authentication, MultipartFile file) {
         User user = findByAuthentication(authentication);
-        String storedPath = fileStorageService.storeAvatar(file, user.getId());
-        fileStorageService.deleteAvatar(user.getAvatar());
-        user.setAvatar(storedPath);
-        AuthResponse response = toResponse(userRepository.save(user));
+        fileStorageService.storeAvatar(file, user.getId());
         log.trace("User {} updated their avatar", user.getId());
-        return response;
+        return toResponse(user);
     }
 
     /**
@@ -100,15 +96,10 @@ public class UserService {
         return AuthResponse.builder()
                 .id(user.getId())
                 .userName(user.getUserName())
-                .avatar(withVersion(user.getAvatar()))
+                .avatar(fileStorageService.avatarUrl(user.getId()))
                 .phone(user.getPhone())
                 .email(user.getEmail())
                 .build();
-    }
-
-    private String withVersion(String avatar) {
-        Long version = fileStorageService.getVersion(avatar);
-        return version != null ? avatar + "?v=" + version : avatar;
     }
 
     private String blankToNull(String value) {

@@ -88,7 +88,7 @@ public class FileStorageService {
             throw new IllegalStateException("Failed to store file", ex);
         }
         log.info("Stored file {}/{}", namespace, fileName);
-        return PUBLIC_PREFIX + namespace + "/" + fileName;
+        return PUBLIC_PREFIX + namespace + "/" + key;
     }
 
     /**
@@ -113,19 +113,6 @@ public class FileStorageService {
     }
 
     /**
-     * Deletes the avatar file referenced by the given public URL, if any.
-     *
-     * @param avatarUrl the public URL of the avatar to delete, may be null
-     */
-    public void deleteAvatar(String avatarUrl) {
-        String[] parts = parse(avatarUrl);
-        if (parts == null) {
-            return;
-        }
-        delete(parts[0], parts[1]);
-    }
-
-    /**
      * Deletes the file in the given namespace under the given key, if any.
      *
      * @param namespace the namespace of the object
@@ -144,26 +131,26 @@ public class FileStorageService {
     }
 
     /**
-     * Returns a cache-busting version for the avatar at the given URL.
+     * Returns the public URL of the user's avatar, or {@code null} if the user has no
+     * avatar. A cache-busting {@code ?v=} version is appended when the file's
+     * last-modified timestamp is available.
      *
-     * @param avatarUrl the public URL of the avatar, may be null
-     * @return the last-modified timestamp of the stored file, or null if unavailable
+     * @param userId the owning user's id
+     * @return the avatar URL, or {@code null} if no avatar exists
      */
-    public Long getVersion(String avatarUrl) {
-        String[] parts = parse(avatarUrl);
-        if (parts == null) {
-            return null;
-        }
-        ObjectReference reference = find(parts[0], parts[1]);
+    public String avatarUrl(Long userId) {
+        String key = String.valueOf(userId);
+        ObjectReference reference = find(ObjectManagerRegistry.NAMESPACE_AVATARS, key);
         if (reference == null) {
             return null;
         }
+        String base = PUBLIC_PREFIX + ObjectManagerRegistry.NAMESPACE_AVATARS + "/" + key;
         Path file = uploadDir.resolve(reference.metadata().storageLocation()).normalize();
         try {
-            return Files.getLastModifiedTime(file).toMillis();
+            return base + "?v=" + Files.getLastModifiedTime(file).toMillis();
         } catch (IOException ex) {
-            log.warn("Failed to read file timestamp {}", file, ex);
-            return null;
+            log.warn("Failed to read avatar timestamp {}", file, ex);
+            return base;
         }
     }
 
@@ -183,21 +170,5 @@ public class FileStorageService {
             throw new IllegalArgumentException("Unknown storage namespace: " + namespace);
         }
         return manager;
-    }
-
-    private static String[] parse(String url) {
-        if (url == null || !url.startsWith(PUBLIC_PREFIX)) {
-            return null;
-        }
-        String relative = url.substring(PUBLIC_PREFIX.length());
-        int slash = relative.indexOf('/');
-        if (slash <= 0 || slash == relative.length() - 1) {
-            return null;
-        }
-        String namespace = relative.substring(0, slash);
-        String fileName = relative.substring(slash + 1);
-        int dot = fileName.lastIndexOf('.');
-        String key = dot == -1 ? fileName : fileName.substring(0, dot);
-        return new String[]{namespace, key};
     }
 }

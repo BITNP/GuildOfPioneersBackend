@@ -130,7 +130,7 @@ Keep entries sorted by path, then by HTTP method.
     {
       "id": 1,
       "userName": "Alice",
-      "avatar": "/uploads/avatars/1.png?v=1720000000000",
+      "avatar": "/uploads/avatars/1?v=1720000000000",
       "phone": "13800000000",
       "email": "alice@example.com"
     }
@@ -165,7 +165,7 @@ Keep entries sorted by path, then by HTTP method.
     {
       "id": 1,
       "userName": "Alice",
-      "avatar": "/uploads/avatars/1.png?v=1720000000000",
+      "avatar": "/uploads/avatars/1?v=1720000000000",
       "phone": "13800000000",
       "email": "alice@example.com",
       "department": "Technology"
@@ -190,7 +190,7 @@ Keep entries sorted by path, then by HTTP method.
     {
       "id": 1,
       "userName": "Alice",
-      "avatar": "/uploads/avatars/1.png?v=1720000000000",
+      "avatar": "/uploads/avatars/1?v=1720000000000",
       "phone": "13800000000",
       "email": "alice@example.com"
     }
@@ -202,7 +202,7 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `PUT /api/auth/avatar`
 
-- **Description**: Uploads (or replaces) the current user's avatar. The image is stored on the server under `app.upload-dir` (`./uploads/avatars/` by default), named `<userId>.<ext>`. The user's `avatar` field becomes the public path. An older locally stored file is deleted; if a file with the same extension is re-uploaded, clients should use the `?v=` version query parameter to bypass cached copies.
+- **Description**: Uploads (or replaces) the current user's avatar. The image is stored through the Veil storage layer, keyed by the user's id in the `avatars` namespace, and the `avatar` field of the response is the public path `/uploads/avatars/{userId}` with a `?v=` cache-busting version. Re-uploading replaces the stored file in place.
 - **Authentication**: Authenticated session.
 - **Request Body**: multipart form-data:
   - `file` (binary, required) - avatar image. Allowed types: `image/jpeg`, `image/png`, `image/webp`, `image/gif`. Max size 5MB.
@@ -215,7 +215,7 @@ Keep entries sorted by path, then by HTTP method.
     {
       "id": 1,
       "userName": "Alice",
-      "avatar": "/uploads/avatars/1.png?v=1720000000000",
+      "avatar": "/uploads/avatars/1?v=1720000000000",
       "phone": "13800000000",
       "email": "alice@example.com"
     }
@@ -227,12 +227,12 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `GET /uploads/{namespace}/{fileName}`
 
-- **Description**: Serves a stored file from the Veil storage layer via a controller so authorization can be applied later. The file name includes its extension, e.g. `GET /uploads/avatars/1.png` serves the avatar with key `1`. Public for the `avatars` namespace.
+- **Description**: Serves a stored file from the Veil storage layer via a controller so authorization can be applied later. The final path segment is the object key (an extension is optional and ignored for lookup), e.g. `GET /uploads/avatars/1` serves the avatar with key `1`. Public for the `avatars` namespace.
 - **Authentication**: None.
 - **Request Body**: -
 - **Path Parameters**:
   - `namespace` (string) - the storage namespace, e.g. `avatars`.
-  - `fileName` (string) - the stored file name including its extension, e.g. `1.png`.
+  - `fileName` (string) - the object key; an extension is optional and ignored for lookup, e.g. `1`.
 - **Query Parameters**: `v` (string, optional) - cache-busting version (the file's last-modified timestamp).
 - **Success Response**:
   - **Status**: `200 OK`

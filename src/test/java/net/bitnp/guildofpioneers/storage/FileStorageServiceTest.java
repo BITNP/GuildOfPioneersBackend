@@ -61,7 +61,7 @@ class FileStorageServiceTest {
 
         String url = service.storeAvatar(file, 42L);
 
-        assertThat(url).isEqualTo("/uploads/avatars/42.png");
+        assertThat(url).isEqualTo("/uploads/avatars/42");
         verify(manager).update(argThat(s -> "42".equals(s.key())), eq("42.png"), any());
     }
 
@@ -113,24 +113,25 @@ class FileStorageServiceTest {
     }
 
     @Test
-    void deleteAvatar_removesStoredFile() {
+    void delete_removesStoredFile() {
         when(registry.get(NAMESPACE)).thenReturn(manager);
 
-        service.deleteAvatar("/uploads/avatars/42.png");
+        service.delete(NAMESPACE, "42");
 
         verify(manager).remove(argThat(s -> "42".equals(s.key())));
     }
 
     @Test
-    void deleteAvatar_ignoresExternalUrls() {
-        service.deleteAvatar("https://example.com/avatar.png");
-        service.deleteAvatar(null);
+    void delete_unknownNamespace_isNoOp() {
+        when(registry.get("unknown")).thenReturn(null);
+
+        service.delete("unknown", "42");
 
         verify(manager, never()).remove(any());
     }
 
     @Test
-    void getVersion_returnsFileTimestamp() throws IOException {
+    void avatarUrl_returnsUrlWithVersion() throws IOException {
         when(registry.get(NAMESPACE)).thenReturn(manager);
         ObjectMetadata metadata = new ObjectMetadata(
                 "42.png", "png", 3L, "md5", "2026-01-01T00:00:00Z", null, "DISK", "avatars/42.png", 0L);
@@ -141,20 +142,14 @@ class FileStorageServiceTest {
         Files.createDirectories(file.getParent());
         Files.write(file, new byte[]{1, 2, 3});
 
-        assertThat(service.getVersion("/uploads/avatars/42.png")).isNotNull();
+        assertThat(service.avatarUrl(42L)).startsWith("/uploads/avatars/42?v=");
     }
 
     @Test
-    void getVersion_returnsNullWhenMissing() {
+    void avatarUrl_returnsNullWhenMissing() {
         when(registry.get(NAMESPACE)).thenReturn(manager);
         when(manager.query(any())).thenReturn(List.of());
 
-        assertThat(service.getVersion("/uploads/avatars/42.png")).isNull();
-    }
-
-    @Test
-    void getVersion_returnsNullForExternalUrl() {
-        assertThat(service.getVersion("https://example.com/avatar.png")).isNull();
-        assertThat(service.getVersion(null)).isNull();
+        assertThat(service.avatarUrl(42L)).isNull();
     }
 }

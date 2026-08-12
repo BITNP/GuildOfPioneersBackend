@@ -80,30 +80,25 @@ class UserServiceTest {
     }
 
     @Test
-    void updateAvatar_storesFileDeletesOldAndSavesUser() {
+    void updateAvatar_storesFileAndReturnsResponse() {
         Authentication authentication = new TestingAuthenticationToken("Alice", null);
         User user = User.builder()
                 .id(42L)
                 .userName("Alice")
-                .avatar("/uploads/avatars/42.png")
                 .phone("13800000000")
                 .password("encoded-hash")
                 .build();
         when(userRepository.findByUserNameIgnoreCase("Alice")).thenReturn(Optional.of(user));
-        when(userRepository.save(user)).thenReturn(user);
-        when(fileStorageService.storeAvatar(any(), org.mockito.ArgumentMatchers.eq(42L)))
-                .thenReturn("/uploads/avatars/42.jpg");
-        when(fileStorageService.getVersion("/uploads/avatars/42.jpg")).thenReturn(1720000000000L);
+        when(fileStorageService.avatarUrl(42L)).thenReturn("/uploads/avatars/42?v=1720000000000");
         MockMultipartFile file = new MockMultipartFile(
                 "file", "avatar.jpg", "image/jpeg", new byte[]{(byte) 0xFF, (byte) 0xD8}
         );
 
         AuthResponse response = userService.updateAvatar(authentication, file);
 
-        verify(fileStorageService).deleteAvatar("/uploads/avatars/42.png");
-        verify(userRepository).save(user);
-        assertThat(user.getAvatar()).isEqualTo("/uploads/avatars/42.jpg");
-        assertThat(response.getAvatar()).isEqualTo("/uploads/avatars/42.jpg?v=1720000000000");
+        verify(fileStorageService).storeAvatar(any(), org.mockito.ArgumentMatchers.eq(42L));
+        verify(userRepository, org.mockito.Mockito.never()).save(any());
+        assertThat(response.getAvatar()).isEqualTo("/uploads/avatars/42?v=1720000000000");
     }
 
     @Test

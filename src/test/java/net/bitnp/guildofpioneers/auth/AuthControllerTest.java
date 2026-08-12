@@ -48,7 +48,7 @@ class AuthControllerTest {
                 .thenReturn(AuthResponse.builder()
                         .id(42L)
                         .userName("Alice")
-                        .avatar("/uploads/avatars/42.png?v=1720000000000")
+                        .avatar("/uploads/avatars/42?v=1720000000000")
                         .phone("13800000000")
                         .build());
         MockMultipartFile file = new MockMultipartFile(
@@ -62,7 +62,7 @@ class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.id").value(42))
-                .andExpect(jsonPath("$.avatar").value("/uploads/avatars/42.png?v=1720000000000"));
+                .andExpect(jsonPath("$.avatar").value("/uploads/avatars/42?v=1720000000000"));
     }
 
     @Test

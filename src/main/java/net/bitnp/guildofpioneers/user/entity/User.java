@@ -34,9 +34,6 @@ public class User {
     @Column(name = "user_name", nullable = false)
     private String userName;
 
-    @Column(name = "avatar")
-    private String avatar;
-
     @NotBlank
     @Column(name = "phone", nullable = false)
     private String phone;
