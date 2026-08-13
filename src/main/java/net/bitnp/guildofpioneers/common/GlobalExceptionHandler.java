@@ -6,6 +6,9 @@ import net.bitnp.guildofpioneers.storage.InvalidFileTypeException;
 import net.bitnp.guildofpioneers.storage.StoredFileNotFoundException;
 import net.bitnp.guildofpioneers.ticket.TicketExpiredException;
 import net.bitnp.guildofpioneers.ticket.TicketNotFoundException;
+import net.bitnp.guildofpioneers.todo.exception.TodoActionNotFoundException;
+import net.bitnp.guildofpioneers.todo.exception.TodoProjectNotFoundException;
+import net.bitnp.guildofpioneers.todo.exception.TodoTaskNotFoundException;
 import net.bitnp.guildofpioneers.user.exception.PhoneAlreadyExistsException;
 import net.bitnp.guildofpioneers.user.exception.UserNameAlreadyExistsException;
 import org.springframework.http.HttpStatus;
@@ -76,6 +79,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(StoredFileNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleStoredFileNotFound(
             StoredFileNotFoundException ex, HttpServletRequest request
+    ) {
+        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler({TodoProjectNotFoundException.class, TodoTaskNotFoundException.class, TodoActionNotFoundException.class})
+    public ResponseEntity<Map<String, Object>> handleTodoNotFound(
+            RuntimeException ex, HttpServletRequest request
     ) {
         return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request);
     }

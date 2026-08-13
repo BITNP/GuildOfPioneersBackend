@@ -19,6 +19,7 @@ import java.util.Map;
 public class ObjectManagerRegistry {
 
     public static final String NAMESPACE_AVATARS = "avatars";
+    public static final String NAMESPACE_PROJECT_COVERS = "project_covers";
 
     private final Map<String, ObjectManager> managers;
 
@@ -31,6 +32,10 @@ public class ObjectManagerRegistry {
         Map<String, ObjectManager> built = new LinkedHashMap<>();
         built.put(NAMESPACE_AVATARS, build(
                 NAMESPACE_AVATARS,
+                databaseManager,
+                "jpg", "png", "webp", "gif"));
+        built.put(NAMESPACE_PROJECT_COVERS, build(
+                NAMESPACE_PROJECT_COVERS,
                 databaseManager,
                 "jpg", "png", "webp", "gif"));
         this.managers = Collections.unmodifiableMap(built);

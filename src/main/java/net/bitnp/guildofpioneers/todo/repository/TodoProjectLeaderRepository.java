@@ -4,8 +4,12 @@ import net.bitnp.guildofpioneers.todo.entity.TodoProjectLeader;
 import net.bitnp.guildofpioneers.todo.entity.TodoProjectLeaderKey;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
+
 /**
  * Spring Data repository for {@link TodoProjectLeader} persistence.
  */
 public interface TodoProjectLeaderRepository extends JpaRepository<TodoProjectLeader, TodoProjectLeaderKey> {
+
+    List<TodoProjectLeader> findById_ProjectId(Long projectId);
 }

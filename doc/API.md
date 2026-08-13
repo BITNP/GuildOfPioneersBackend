@@ -225,6 +225,165 @@ Keep entries sorted by path, then by HTTP method.
   - `401 UNAUTHORIZED` - not authenticated.
   - `413 CONTENT_TOO_LARGE` - file exceeds the maximum allowed size.
 
+### `GET /api/todo/actions?taskId={taskId}`
+
+- **Description**: Lists the actions of a task, newest first.
+- **Authentication**: Authenticated session.
+- **Request Body**: -
+- **Path Parameters**: -
+- **Query Parameters**: `taskId` (integer, required) - the owning task's id.
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**:
+    ```json
+    [
+      {
+        "id": 1,
+        "taskId": 1,
+        "title": "Write report",
+        "description": "Draft the final report",
+        "createdDate": "2026-08-13T08:00:00.000Z",
+        "endDate": null,
+        "memberIds": [2, 3]
+      }
+    ]
+    ```
+- **Error Responses**:
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `404 NOT_FOUND` - the task does not exist.
+
+### `GET /api/todo/actions/{actionId}`
+
+- **Description**: Returns a single action with its members.
+- **Authentication**: Authenticated session.
+- **Request Body**: -
+- **Path Parameters**: `actionId` (integer) - the action's id.
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**:
+    ```json
+    {
+      "id": 1,
+      "taskId": 1,
+      "title": "Write report",
+      "description": "Draft the final report",
+      "createdDate": "2026-08-13T08:00:00.000Z",
+      "endDate": null,
+      "memberIds": [2, 3]
+    }
+    ```
+- **Error Responses**:
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `404 NOT_FOUND` - the action does not exist.
+
+### `GET /api/todo/projects`
+
+- **Description**: Lists all projects, newest first.
+- **Authentication**: Authenticated session.
+- **Request Body**: -
+- **Path Parameters**: -
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**:
+    ```json
+    [
+      {
+        "id": 1,
+        "title": "Autumn Camp",
+        "cover": "/uploads/project_covers/1?v=1720000000000",
+        "description": "Annual autumn camp",
+        "createdDate": "2026-08-13T08:00:00.000Z",
+        "endDate": null,
+        "leaderIds": [1],
+        "memberIds": [2, 3]
+      }
+    ]
+    ```
+- **Error Responses**:
+  - `401 UNAUTHORIZED` - not authenticated.
+
+### `GET /api/todo/projects/{projectId}`
+
+- **Description**: Returns a single project with its leaders, members, and cover image. `cover` is `null` when the project has no stored cover.
+- **Authentication**: Authenticated session.
+- **Request Body**: -
+- **Path Parameters**: `projectId` (integer) - the project's id.
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**:
+    ```json
+    {
+      "id": 1,
+      "title": "Autumn Camp",
+      "cover": "/uploads/project_covers/1?v=1720000000000",
+      "description": "Annual autumn camp",
+      "createdDate": "2026-08-13T08:00:00.000Z",
+      "endDate": null,
+      "leaderIds": [1],
+      "memberIds": [2, 3]
+    }
+    ```
+- **Error Responses**:
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `404 NOT_FOUND` - the project does not exist.
+
+### `GET /api/todo/tasks?projectId={projectId}`
+
+- **Description**: Lists the tasks of a project, newest first.
+- **Authentication**: Authenticated session.
+- **Request Body**: -
+- **Path Parameters**: -
+- **Query Parameters**: `projectId` (integer, required) - the owning project's id.
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**:
+    ```json
+    [
+      {
+        "id": 1,
+        "projectId": 1,
+        "title": "Prepare supplies",
+        "description": "Buy camping supplies",
+        "createdDate": "2026-08-13T08:00:00.000Z",
+        "endDate": null,
+        "leaderIds": [1],
+        "memberIds": [2]
+      }
+    ]
+    ```
+- **Error Responses**:
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `404 NOT_FOUND` - the project does not exist.
+
+### `GET /api/todo/tasks/{taskId}`
+
+- **Description**: Returns a single task with its leaders and members.
+- **Authentication**: Authenticated session.
+- **Request Body**: -
+- **Path Parameters**: `taskId` (integer) - the task's id.
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**:
+    ```json
+    {
+      "id": 1,
+      "projectId": 1,
+      "title": "Prepare supplies",
+      "description": "Buy camping supplies",
+      "createdDate": "2026-08-13T08:00:00.000Z",
+      "endDate": null,
+      "leaderIds": [1],
+      "memberIds": [2]
+    }
+    ```
+- **Error Responses**:
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `404 NOT_FOUND` - the task does not exist.
+
 ### `GET /uploads/{namespace}/{fileName}`
 
 - **Description**: Serves a stored file from the Veil storage layer via a controller so authorization can be applied later. The final path segment is the object key (an extension is optional and ignored for lookup), e.g. `GET /uploads/avatars/1` serves the avatar with key `1`. Public for the `avatars` namespace.

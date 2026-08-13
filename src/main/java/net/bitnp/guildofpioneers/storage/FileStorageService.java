@@ -139,17 +139,32 @@ public class FileStorageService {
      * @return the avatar URL, or {@code null} if no avatar exists
      */
     public String avatarUrl(Long userId) {
-        String key = String.valueOf(userId);
-        ObjectReference reference = find(ObjectManagerRegistry.NAMESPACE_AVATARS, key);
+        return urlFor(ObjectManagerRegistry.NAMESPACE_AVATARS, String.valueOf(userId));
+    }
+
+    /**
+     * Returns the public URL of the project's cover image, or {@code null} if the
+     * project has no cover. A cache-busting {@code ?v=} version is appended when the
+     * file's last-modified timestamp is available.
+     *
+     * @param projectId the owning project's id
+     * @return the cover URL, or {@code null} if no cover exists
+     */
+    public String projectCoverUrl(Long projectId) {
+        return urlFor(ObjectManagerRegistry.NAMESPACE_PROJECT_COVERS, String.valueOf(projectId));
+    }
+
+    private String urlFor(String namespace, String key) {
+        ObjectReference reference = find(namespace, key);
         if (reference == null) {
             return null;
         }
-        String base = PUBLIC_PREFIX + ObjectManagerRegistry.NAMESPACE_AVATARS + "/" + key;
+        String base = PUBLIC_PREFIX + namespace + "/" + key;
         Path file = uploadDir.resolve(reference.metadata().storageLocation()).normalize();
         try {
             return base + "?v=" + Files.getLastModifiedTime(file).toMillis();
         } catch (IOException ex) {
-            log.warn("Failed to read avatar timestamp {}", file, ex);
+            log.warn("Failed to read file timestamp {}", file, ex);
             return base;
         }
     }
