@@ -10,5 +10,5 @@ import java.util.List;
  */
 public interface TodoTaskRepository extends JpaRepository<TodoTask, Long> {
 
-    List<TodoTask> findByProjectIdOrderByCreatedDateDesc(Long projectId);
+    List<TodoTask> findByProjectIdOrderByUpdatedDateDesc(Long projectId);
 }

@@ -45,6 +45,9 @@ public class TodoTask {
     @Column(name = "created_date", nullable = false)
     private Instant createdDate;
 
+    @Column(name = "updated_date", nullable = false)
+    private Instant updatedDate;
+
     @Column(name = "end_date")
     private Instant endDate;
 }

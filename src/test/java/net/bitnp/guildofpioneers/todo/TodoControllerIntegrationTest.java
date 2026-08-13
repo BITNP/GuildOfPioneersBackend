@@ -123,6 +123,7 @@ class TodoControllerIntegrationTest {
                 .title("Autumn Camp")
                 .description("Annual autumn camp")
                 .createdDate(CREATED)
+                .updatedDate(CREATED)
                 .build());
         projectLeaderRepository.save(TodoProjectLeader.builder()
                 .id(new TodoProjectLeaderKey(project.getId(), leader.getId()))
@@ -136,6 +137,7 @@ class TodoControllerIntegrationTest {
                 .title("Prepare supplies")
                 .description("Buy camping supplies")
                 .createdDate(CREATED)
+                .updatedDate(CREATED)
                 .build());
         taskLeaderRepository.save(TodoTaskLeader.builder()
                 .id(new TodoTaskLeaderKey(task.getId(), leader.getId()))
@@ -149,6 +151,7 @@ class TodoControllerIntegrationTest {
                 .title("Write report")
                 .description("Draft the final report")
                 .createdDate(CREATED)
+                .updatedDate(CREATED)
                 .build());
         actionMemberRepository.save(TodoActionMember.builder()
                 .id(new TodoActionMemberKey(action.getId(), member.getId()))
@@ -176,9 +179,26 @@ class TodoControllerIntegrationTest {
                 .andExpect(jsonPath("$[0].description").value("Annual autumn camp"))
                 .andExpect(jsonPath("$[0].cover").value(nullValue()))
                 .andExpect(jsonPath("$[0].createdDate").exists())
+                .andExpect(jsonPath("$[0].updatedDate").exists())
                 .andExpect(jsonPath("$[0].endDate").value(nullValue()))
                 .andExpect(jsonPath("$[0].leaderIds[0]").value(leader.getId().intValue()))
                 .andExpect(jsonPath("$[0].memberIds[0]").value(member.getId().intValue()));
+    }
+
+    @Test
+    void listProjects_sortsByUpdatedDateDesc() throws Exception {
+        TodoProject newer = projectRepository.save(TodoProject.builder()
+                .title("Newer Project")
+                .description("Recently updated")
+                .createdDate(CREATED)
+                .updatedDate(CREATED.plusSeconds(3600))
+                .build());
+
+        mockMvc.perform(get("/api/todo/projects").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(newer.getId().intValue()))
+                .andExpect(jsonPath("$[0].title").value("Newer Project"))
+                .andExpect(jsonPath("$[1].id").value(project.getId().intValue()));
     }
 
     @Test

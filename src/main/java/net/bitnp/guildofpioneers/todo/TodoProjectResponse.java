@@ -24,6 +24,7 @@ public class TodoProjectResponse {
     private String cover;
     private String description;
     private Instant createdDate;
+    private Instant updatedDate;
     private Instant endDate;
     private List<Long> leaderIds;
     private List<Long> memberIds;

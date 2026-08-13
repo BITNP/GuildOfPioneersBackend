@@ -24,6 +24,7 @@ public class TodoTaskResponse {
     private String title;
     private String description;
     private Instant createdDate;
+    private Instant updatedDate;
     private Instant endDate;
     private List<Long> leaderIds;
     private List<Long> memberIds;

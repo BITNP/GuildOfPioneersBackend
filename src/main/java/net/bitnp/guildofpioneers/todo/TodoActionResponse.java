@@ -24,6 +24,7 @@ public class TodoActionResponse {
     private String title;
     private String description;
     private Instant createdDate;
+    private Instant updatedDate;
     private Instant endDate;
     private List<Long> memberIds;
 }

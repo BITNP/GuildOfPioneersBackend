@@ -10,5 +10,5 @@ import java.util.List;
  */
 public interface TodoActionRepository extends JpaRepository<TodoAction, Long> {
 
-    List<TodoAction> findByTaskIdOrderByCreatedDateDesc(Long taskId);
+    List<TodoAction> findByTaskIdOrderByUpdatedDateDesc(Long taskId);
 }

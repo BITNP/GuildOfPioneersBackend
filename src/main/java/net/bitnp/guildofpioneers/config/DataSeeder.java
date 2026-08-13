@@ -242,6 +242,7 @@ public class DataSeeder implements ApplicationRunner {
                     .title(PROJECT_TITLES[p % PROJECT_TITLES.length])
                     .description("Seed project for " + PROJECT_TITLES[p % PROJECT_TITLES.length])
                     .createdDate(projectCreated)
+                    .updatedDate(projectCreated)
                     .endDate(finishDate(projectCreated))
                     .build());
             leaders.forEach(user -> todoProjectLeaderRepository.save(TodoProjectLeader.builder()
@@ -260,6 +261,7 @@ public class DataSeeder implements ApplicationRunner {
                         .title(TASK_TITLES[(p * TASKS_PER_PROJECT + t) % TASK_TITLES.length])
                         .description("Seed task for " + project.getTitle())
                         .createdDate(taskCreated)
+                        .updatedDate(taskCreated)
                         .endDate(finishDate(taskCreated))
                         .build());
                 taskLeaders.forEach(user -> todoTaskLeaderRepository.save(TodoTaskLeader.builder()
@@ -278,6 +280,7 @@ public class DataSeeder implements ApplicationRunner {
                             .title(ACTION_TITLES[(t * ACTIONS_PER_TASK + a) % ACTION_TITLES.length])
                             .description("Seed action for " + task.getTitle())
                             .createdDate(actionCreated)
+                            .updatedDate(actionCreated)
                             .endDate(finishDate(actionCreated))
                             .build());
                     actionMembers.forEach(user -> todoActionMemberRepository.save(TodoActionMember.builder()

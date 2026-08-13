@@ -227,7 +227,7 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `GET /api/todo/actions?taskId={taskId}`
 
-- **Description**: Lists the actions of a task, newest first.
+- **Description**: Lists the actions of a task, most recently updated first.
 - **Authentication**: Authenticated session.
 - **Request Body**: -
 - **Path Parameters**: -
@@ -243,6 +243,7 @@ Keep entries sorted by path, then by HTTP method.
         "title": "Write report",
         "description": "Draft the final report",
         "createdDate": "2026-08-13T08:00:00.000Z",
+        "updatedDate": "2026-08-13T08:00:00.000Z",
         "endDate": null,
         "memberIds": [2, 3]
       }
@@ -279,7 +280,7 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `GET /api/todo/projects`
 
-- **Description**: Lists all projects, newest first.
+- **Description**: Lists all projects, most recently updated first.
 - **Authentication**: Authenticated session.
 - **Request Body**: -
 - **Path Parameters**: -
@@ -295,6 +296,7 @@ Keep entries sorted by path, then by HTTP method.
         "cover": "/uploads/project_covers/1?v=1720000000000",
         "description": "Annual autumn camp",
         "createdDate": "2026-08-13T08:00:00.000Z",
+        "updatedDate": "2026-08-13T08:00:00.000Z",
         "endDate": null,
         "leaderIds": [1],
         "memberIds": [2, 3]
@@ -332,7 +334,7 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `GET /api/todo/tasks?projectId={projectId}`
 
-- **Description**: Lists the tasks of a project, newest first.
+- **Description**: Lists the tasks of a project, most recently updated first.
 - **Authentication**: Authenticated session.
 - **Request Body**: -
 - **Path Parameters**: -
@@ -348,6 +350,7 @@ Keep entries sorted by path, then by HTTP method.
         "title": "Prepare supplies",
         "description": "Buy camping supplies",
         "createdDate": "2026-08-13T08:00:00.000Z",
+        "updatedDate": "2026-08-13T08:00:00.000Z",
         "endDate": null,
         "leaderIds": [1],
         "memberIds": [2]

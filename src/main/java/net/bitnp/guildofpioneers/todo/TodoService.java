@@ -19,10 +19,13 @@ import net.bitnp.guildofpioneers.todo.repository.TodoTaskRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
- * Provides read access to the three-layer todo hierarchy: projects, tasks, and actions.
+ * Provides access to the three-layer todo hierarchy: projects, tasks, and actions.
+ * Read methods expose the hierarchy, while the {@code touch*} methods centralize
+ * the "updated time" invariant that propagates activity up the hierarchy.
  */
 @Slf4j
 @Service
@@ -61,13 +64,13 @@ public class TodoService {
     }
 
     /**
-     * Returns all projects ordered by creation date, newest first.
+     * Returns all projects ordered by updated date, newest first.
      *
      * @return the project responses
      */
     @Transactional(readOnly = true)
     public List<TodoProjectResponse> listProjects() {
-        return todoProjectRepository.findAllByOrderByCreatedDateDesc().stream()
+        return todoProjectRepository.findAllByOrderByUpdatedDateDesc().stream()
                 .map(this::toProjectResponse)
                 .toList();
     }
@@ -85,7 +88,7 @@ public class TodoService {
     }
 
     /**
-     * Returns the tasks of a project ordered by creation date, newest first.
+     * Returns the tasks of a project ordered by updated date, newest first.
      *
      * @param projectId the owning project's id
      * @return the task responses
@@ -94,7 +97,7 @@ public class TodoService {
     @Transactional(readOnly = true)
     public List<TodoTaskResponse> listTasks(Long projectId) {
         findProject(projectId);
-        return todoTaskRepository.findByProjectIdOrderByCreatedDateDesc(projectId).stream()
+        return todoTaskRepository.findByProjectIdOrderByUpdatedDateDesc(projectId).stream()
                 .map(this::toTaskResponse)
                 .toList();
     }
@@ -112,7 +115,7 @@ public class TodoService {
     }
 
     /**
-     * Returns the actions of a task ordered by creation date, newest first.
+     * Returns the actions of a task ordered by updated date, newest first.
      *
      * @param taskId the owning task's id
      * @return the action responses
@@ -121,7 +124,7 @@ public class TodoService {
     @Transactional(readOnly = true)
     public List<TodoActionResponse> listActions(Long taskId) {
         findTask(taskId);
-        return todoActionRepository.findByTaskIdOrderByCreatedDateDesc(taskId).stream()
+        return todoActionRepository.findByTaskIdOrderByUpdatedDateDesc(taskId).stream()
                 .map(this::toActionResponse)
                 .toList();
     }
@@ -136,6 +139,50 @@ public class TodoService {
     @Transactional(readOnly = true)
     public TodoActionResponse getAction(Long actionId) {
         return toActionResponse(findAction(actionId));
+    }
+
+    /**
+     * Marks a project as updated by setting its updated date to now.
+     *
+     * <p>This is the top of the hierarchy, so no ancestor needs to be touched.</p>
+     *
+     * @param projectId the project id
+     * @throws TodoProjectNotFoundException if the project does not exist
+     */
+    @Transactional
+    public void touchProject(Long projectId) {
+        TodoProject project = findProject(projectId);
+        project.setUpdatedDate(Instant.now());
+        todoProjectRepository.save(project);
+    }
+
+    /**
+     * Marks a task as updated and propagates the touch to its owning project.
+     *
+     * @param taskId the task id
+     * @throws TodoTaskNotFoundException if the task does not exist
+     */
+    @Transactional
+    public void touchTask(Long taskId) {
+        TodoTask task = findTask(taskId);
+        task.setUpdatedDate(Instant.now());
+        todoTaskRepository.save(task);
+        touchProject(task.getProjectId());
+    }
+
+    /**
+     * Marks an action as updated and propagates the touch to its owning task,
+     * which in turn propagates to the owning project.
+     *
+     * @param actionId the action id
+     * @throws TodoActionNotFoundException if the action does not exist
+     */
+    @Transactional
+    public void touchAction(Long actionId) {
+        TodoAction action = findAction(actionId);
+        action.setUpdatedDate(Instant.now());
+        todoActionRepository.save(action);
+        touchTask(action.getTaskId());
     }
 
     private TodoProject findProject(Long projectId) {
@@ -160,6 +207,7 @@ public class TodoService {
                 .cover(fileStorageService.projectCoverUrl(project.getId()))
                 .description(project.getDescription())
                 .createdDate(project.getCreatedDate())
+                .updatedDate(project.getUpdatedDate())
                 .endDate(project.getEndDate())
                 .leaderIds(projectLeaderIds(project.getId()))
                 .memberIds(projectMemberIds(project.getId()))
@@ -173,6 +221,7 @@ public class TodoService {
                 .title(task.getTitle())
                 .description(task.getDescription())
                 .createdDate(task.getCreatedDate())
+                .updatedDate(task.getUpdatedDate())
                 .endDate(task.getEndDate())
                 .leaderIds(taskLeaderIds(task.getId()))
                 .memberIds(taskMemberIds(task.getId()))
@@ -186,6 +235,7 @@ public class TodoService {
                 .title(action.getTitle())
                 .description(action.getDescription())
                 .createdDate(action.getCreatedDate())
+                .updatedDate(action.getUpdatedDate())
                 .endDate(action.getEndDate())
                 .memberIds(actionMemberIds(action.getId()))
                 .build();

@@ -10,5 +10,5 @@ import java.util.List;
  */
 public interface TodoProjectRepository extends JpaRepository<TodoProject, Long> {
 
-    List<TodoProject> findAllByOrderByCreatedDateDesc();
+    List<TodoProject> findAllByOrderByUpdatedDateDesc();
 }
