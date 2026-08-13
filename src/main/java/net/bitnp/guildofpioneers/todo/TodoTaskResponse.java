@@ -28,4 +28,6 @@ public class TodoTaskResponse {
     private Instant endDate;
     private List<Long> leaderIds;
     private List<Long> memberIds;
+    private List<UserSummaryResponse> leaders;
+    private List<UserSummaryResponse> members;
 }

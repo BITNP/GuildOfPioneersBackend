@@ -30,6 +30,12 @@ public class FileStorageService {
 
     private static final String PUBLIC_PREFIX = "/uploads/";
 
+    /**
+     * Reserved key under which the default avatar is stored in the {@code avatars}
+     * namespace. Users without their own avatar fall back to this object.
+     */
+    public static final String DEFAULT_AVATAR_KEY = "default";
+
     private final ObjectManagerRegistry registry;
     private final AvatarFileTypeHandler avatarFileTypeHandler;
     private final Path uploadDir;
@@ -131,15 +137,22 @@ public class FileStorageService {
     }
 
     /**
-     * Returns the public URL of the user's avatar, or {@code null} if the user has no
-     * avatar. A cache-busting {@code ?v=} version is appended when the file's
-     * last-modified timestamp is available.
+     * Returns the public URL of the user's avatar, falling back to the default avatar
+     * when the user has no stored avatar. A cache-busting {@code ?v=} version is
+     * appended when the file's last-modified timestamp is available.
      *
      * @param userId the owning user's id
-     * @return the avatar URL, or {@code null} if no avatar exists
+     * @return the user's avatar URL, or the default avatar URL if the user has none
      */
     public String avatarUrl(Long userId) {
-        return urlFor(ObjectManagerRegistry.NAMESPACE_AVATARS, String.valueOf(userId));
+        String userUrl = urlFor(ObjectManagerRegistry.NAMESPACE_AVATARS, String.valueOf(userId));
+        if (userUrl != null) {
+            return userUrl;
+        }
+        String defaultUrl = urlFor(ObjectManagerRegistry.NAMESPACE_AVATARS, DEFAULT_AVATAR_KEY);
+        return defaultUrl != null
+                ? defaultUrl
+                : PUBLIC_PREFIX + ObjectManagerRegistry.NAMESPACE_AVATARS + "/" + DEFAULT_AVATAR_KEY;
     }
 
     /**

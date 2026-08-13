@@ -87,7 +87,7 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `POST /api/auth/register`
 
-- **Description**: Registers a new user. A valid, non-expired registration ticket code is required. The password is stored as a BCrypt hash. A user has no avatar until one is uploaded via `PUT /api/auth/avatar`.
+- **Description**: Registers a new user. A valid, non-expired registration ticket code is required. The password is stored as a BCrypt hash. Until the user uploads a custom avatar via `PUT /api/auth/avatar`, the `avatar` field is the default avatar URL (`/uploads/avatars/default`), a reserved object of the `avatars` namespace refreshed from the configured source image at every startup.
 - **Authentication**: None.
 - **Request Body**: `RegisterRequest`:
   - `phone` (string, required) - phone number; must be a Chinese mobile number (`1[3-9]` followed by 9 digits).
@@ -104,7 +104,7 @@ Keep entries sorted by path, then by HTTP method.
     {
       "id": 1,
       "userName": "Alice",
-      "avatar": null,
+      "avatar": "/uploads/avatars/default?v=1720000000000",
       "phone": "13800000000",
       "email": "alice@example.com"
     }
@@ -202,7 +202,7 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `PUT /api/auth/avatar`
 
-- **Description**: Uploads (or replaces) the current user's avatar. The image is stored through the Veil storage layer, keyed by the user's id in the `avatars` namespace, and the `avatar` field of the response is the public path `/uploads/avatars/{userId}` with a `?v=` cache-busting version. Re-uploading replaces the stored file in place.
+- **Description**: Uploads (or replaces) the current user's avatar. The image is stored through the Veil storage layer, keyed by the user's id in the `avatars` namespace, and the `avatar` field of the response is the public path `/uploads/avatars/{userId}` with a `?v=` cache-busting version. Re-uploading replaces the stored file in place. Users without a custom avatar keep getting the default avatar URL (`/uploads/avatars/default`).
 - **Authentication**: Authenticated session.
 - **Request Body**: multipart form-data:
   - `file` (binary, required) - avatar image. Allowed types: `image/jpeg`, `image/png`, `image/webp`, `image/gif`. Max size 5MB.
@@ -280,7 +280,7 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `GET /api/todo/projects`
 
-- **Description**: Lists all projects, most recently updated first.
+- **Description**: Lists all projects, most recently updated first. `leaders` and `members` are user summaries (id, userName, avatar) matching the order of `leaderIds` and `memberIds`; deleted users are skipped.
 - **Authentication**: Authenticated session.
 - **Request Body**: -
 - **Path Parameters**: -
@@ -299,7 +299,26 @@ Keep entries sorted by path, then by HTTP method.
         "updatedDate": "2026-08-13T08:00:00.000Z",
         "endDate": null,
         "leaderIds": [1],
-        "memberIds": [2, 3]
+        "memberIds": [2, 3],
+        "leaders": [
+          {
+            "id": 1,
+            "userName": "Alice",
+            "avatar": "/uploads/avatars/1?v=1720000000000"
+          }
+        ],
+        "members": [
+          {
+            "id": 2,
+            "userName": "Bob",
+            "avatar": "/uploads/avatars/default?v=1720000000000"
+          },
+          {
+            "id": 3,
+            "userName": "Carol",
+            "avatar": "/uploads/avatars/3?v=1720000000000"
+          }
+        ]
       }
     ]
     ```
@@ -325,7 +344,26 @@ Keep entries sorted by path, then by HTTP method.
       "createdDate": "2026-08-13T08:00:00.000Z",
       "endDate": null,
       "leaderIds": [1],
-      "memberIds": [2, 3]
+      "memberIds": [2, 3],
+      "leaders": [
+        {
+          "id": 1,
+          "userName": "Alice",
+          "avatar": "/uploads/avatars/1?v=1720000000000"
+        }
+      ],
+      "members": [
+        {
+          "id": 2,
+          "userName": "Bob",
+          "avatar": "/uploads/avatars/default?v=1720000000000"
+        },
+        {
+          "id": 3,
+          "userName": "Carol",
+          "avatar": "/uploads/avatars/3?v=1720000000000"
+        }
+      ]
     }
     ```
 - **Error Responses**:
@@ -334,7 +372,7 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `GET /api/todo/tasks?projectId={projectId}`
 
-- **Description**: Lists the tasks of a project, most recently updated first.
+- **Description**: Lists the tasks of a project, most recently updated first. `leaders` and `members` are user summaries (id, userName, avatar) matching the order of `leaderIds` and `memberIds`; deleted users are skipped.
 - **Authentication**: Authenticated session.
 - **Request Body**: -
 - **Path Parameters**: -
@@ -353,7 +391,21 @@ Keep entries sorted by path, then by HTTP method.
         "updatedDate": "2026-08-13T08:00:00.000Z",
         "endDate": null,
         "leaderIds": [1],
-        "memberIds": [2]
+        "memberIds": [2],
+        "leaders": [
+          {
+            "id": 1,
+            "userName": "Alice",
+            "avatar": "/uploads/avatars/1?v=1720000000000"
+          }
+        ],
+        "members": [
+          {
+            "id": 2,
+            "userName": "Bob",
+            "avatar": "/uploads/avatars/default?v=1720000000000"
+          }
+        ]
       }
     ]
     ```
@@ -380,7 +432,21 @@ Keep entries sorted by path, then by HTTP method.
       "createdDate": "2026-08-13T08:00:00.000Z",
       "endDate": null,
       "leaderIds": [1],
-      "memberIds": [2]
+      "memberIds": [2],
+      "leaders": [
+        {
+          "id": 1,
+          "userName": "Alice",
+          "avatar": "/uploads/avatars/1?v=1720000000000"
+        }
+      ],
+      "members": [
+        {
+          "id": 2,
+          "userName": "Bob",
+          "avatar": "/uploads/avatars/default?v=1720000000000"
+        }
+      ]
     }
     ```
 - **Error Responses**:
@@ -389,7 +455,7 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `GET /uploads/{namespace}/{fileName}`
 
-- **Description**: Serves a stored file from the Veil storage layer via a controller so authorization can be applied later. The final path segment is the object key (an extension is optional and ignored for lookup), e.g. `GET /uploads/avatars/1` serves the avatar with key `1`. Public for the `avatars` namespace.
+- **Description**: Serves a stored file from the Veil storage layer via a controller so authorization can be applied later. The final path segment is the object key (an extension is optional and ignored for lookup), e.g. `GET /uploads/avatars/1` serves the avatar with key `1`. Public for the `avatars` namespace. The `avatars` namespace additionally holds the reserved key `default`: the default avatar served to users without their own avatar, refreshed from the configured source image (`app.default-avatar`, active while `app.default-avatar-enabled=true`) at every startup.
 - **Authentication**: None.
 - **Request Body**: -
 - **Path Parameters**:

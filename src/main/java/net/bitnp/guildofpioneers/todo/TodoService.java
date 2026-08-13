@@ -16,11 +16,17 @@ import net.bitnp.guildofpioneers.todo.repository.TodoProjectRepository;
 import net.bitnp.guildofpioneers.todo.repository.TodoTaskLeaderRepository;
 import net.bitnp.guildofpioneers.todo.repository.TodoTaskMemberRepository;
 import net.bitnp.guildofpioneers.todo.repository.TodoTaskRepository;
+import net.bitnp.guildofpioneers.user.entity.User;
+import net.bitnp.guildofpioneers.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Provides access to the three-layer todo hierarchy: projects, tasks, and actions.
@@ -40,6 +46,7 @@ public class TodoService {
     private final TodoTaskMemberRepository todoTaskMemberRepository;
     private final TodoActionMemberRepository todoActionMemberRepository;
     private final FileStorageService fileStorageService;
+    private final UserRepository userRepository;
 
     public TodoService(
             TodoProjectRepository todoProjectRepository,
@@ -50,7 +57,8 @@ public class TodoService {
             TodoTaskLeaderRepository todoTaskLeaderRepository,
             TodoTaskMemberRepository todoTaskMemberRepository,
             TodoActionMemberRepository todoActionMemberRepository,
-            FileStorageService fileStorageService
+            FileStorageService fileStorageService,
+            UserRepository userRepository
     ) {
         this.todoProjectRepository = todoProjectRepository;
         this.todoTaskRepository = todoTaskRepository;
@@ -61,6 +69,7 @@ public class TodoService {
         this.todoTaskMemberRepository = todoTaskMemberRepository;
         this.todoActionMemberRepository = todoActionMemberRepository;
         this.fileStorageService = fileStorageService;
+        this.userRepository = userRepository;
     }
 
     /**
@@ -201,6 +210,8 @@ public class TodoService {
     }
 
     private TodoProjectResponse toProjectResponse(TodoProject project) {
+        List<Long> leaderIds = projectLeaderIds(project.getId());
+        List<Long> memberIds = projectMemberIds(project.getId());
         return TodoProjectResponse.builder()
                 .id(project.getId())
                 .title(project.getTitle())
@@ -209,12 +220,16 @@ public class TodoService {
                 .createdDate(project.getCreatedDate())
                 .updatedDate(project.getUpdatedDate())
                 .endDate(project.getEndDate())
-                .leaderIds(projectLeaderIds(project.getId()))
-                .memberIds(projectMemberIds(project.getId()))
+                .leaderIds(leaderIds)
+                .memberIds(memberIds)
+                .leaders(userSummaries(leaderIds))
+                .members(userSummaries(memberIds))
                 .build();
     }
 
     private TodoTaskResponse toTaskResponse(TodoTask task) {
+        List<Long> leaderIds = taskLeaderIds(task.getId());
+        List<Long> memberIds = taskMemberIds(task.getId());
         return TodoTaskResponse.builder()
                 .id(task.getId())
                 .projectId(task.getProjectId())
@@ -223,8 +238,10 @@ public class TodoService {
                 .createdDate(task.getCreatedDate())
                 .updatedDate(task.getUpdatedDate())
                 .endDate(task.getEndDate())
-                .leaderIds(taskLeaderIds(task.getId()))
-                .memberIds(taskMemberIds(task.getId()))
+                .leaderIds(leaderIds)
+                .memberIds(memberIds)
+                .leaders(userSummaries(leaderIds))
+                .members(userSummaries(memberIds))
                 .build();
     }
 
@@ -269,5 +286,33 @@ public class TodoService {
         return todoActionMemberRepository.findById_ActionId(actionId).stream()
                 .map(member -> member.getId().getUserId())
                 .toList();
+    }
+
+    /**
+     * Loads the users behind the given ids in one query and maps them to summaries,
+     * preserving the order of {@code userIds} and skipping users that no longer exist.
+     *
+     * @param userIds the user ids to summarize
+     * @return the user summaries in the same order as the ids
+     */
+    private List<UserSummaryResponse> userSummaries(List<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, User> usersById = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+        return userIds.stream()
+                .map(usersById::get)
+                .filter(Objects::nonNull)
+                .map(this::toUserSummary)
+                .toList();
+    }
+
+    private UserSummaryResponse toUserSummary(User user) {
+        return UserSummaryResponse.builder()
+                .id(user.getId())
+                .userName(user.getUserName())
+                .avatar(fileStorageService.avatarUrl(user.getId()))
+                .build();
     }
 }

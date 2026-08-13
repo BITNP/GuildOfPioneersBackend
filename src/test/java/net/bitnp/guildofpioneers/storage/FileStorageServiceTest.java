@@ -146,10 +146,25 @@ class FileStorageServiceTest {
     }
 
     @Test
-    void avatarUrl_returnsNullWhenMissing() {
+    void avatarUrl_fallsBackToDefaultWhenUserHasNone() throws IOException {
         when(registry.get(NAMESPACE)).thenReturn(manager);
-        when(manager.query(any())).thenReturn(List.of());
+        ObjectMetadata metadata = new ObjectMetadata(
+                "default.jpg", "jpg", 3L, "md5", "2026-01-01T00:00:00Z", null, "DISK", "avatars/default.jpg", 0L);
+        ObjectReference reference = new ObjectReference("default", Map.of(), metadata);
+        when(manager.query(any())).thenReturn(List.of(), List.of(reference));
 
-        assertThat(service.avatarUrl(42L)).isNull();
+        Path file = tempDir.resolve("avatars/default.jpg");
+        Files.createDirectories(file.getParent());
+        Files.write(file, new byte[]{1, 2, 3});
+
+        assertThat(service.avatarUrl(42L)).startsWith("/uploads/avatars/default?v=");
+    }
+
+    @Test
+    void avatarUrl_returnsBareDefaultUrlWhenNothingStored() {
+        when(registry.get(NAMESPACE)).thenReturn(manager);
+        when(manager.query(any())).thenReturn(List.of(), List.of());
+
+        assertThat(service.avatarUrl(42L)).isEqualTo("/uploads/avatars/default");
     }
 }

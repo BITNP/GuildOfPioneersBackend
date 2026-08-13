@@ -37,6 +37,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import java.time.Instant;
 
 import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -182,7 +183,12 @@ class TodoControllerIntegrationTest {
                 .andExpect(jsonPath("$[0].updatedDate").exists())
                 .andExpect(jsonPath("$[0].endDate").value(nullValue()))
                 .andExpect(jsonPath("$[0].leaderIds[0]").value(leader.getId().intValue()))
-                .andExpect(jsonPath("$[0].memberIds[0]").value(member.getId().intValue()));
+                .andExpect(jsonPath("$[0].memberIds[0]").value(member.getId().intValue()))
+                .andExpect(jsonPath("$[0].leaders[0].id").value(leader.getId().intValue()))
+                .andExpect(jsonPath("$[0].leaders[0].userName").value("Alice"))
+                .andExpect(jsonPath("$[0].leaders[0].avatar", startsWith("/uploads/avatars/default")))
+                .andExpect(jsonPath("$[0].members[0].id").value(member.getId().intValue()))
+                .andExpect(jsonPath("$[0].members[0].userName").value("Bob"));
     }
 
     @Test
@@ -208,7 +214,11 @@ class TodoControllerIntegrationTest {
                 .andExpect(jsonPath("$.id").value(project.getId().intValue()))
                 .andExpect(jsonPath("$.title").value("Autumn Camp"))
                 .andExpect(jsonPath("$.leaderIds[0]").value(leader.getId().intValue()))
-                .andExpect(jsonPath("$.memberIds[0]").value(member.getId().intValue()));
+                .andExpect(jsonPath("$.memberIds[0]").value(member.getId().intValue()))
+                .andExpect(jsonPath("$.leaders[0].id").value(leader.getId().intValue()))
+                .andExpect(jsonPath("$.leaders[0].userName").value("Alice"))
+                .andExpect(jsonPath("$.members[0].id").value(member.getId().intValue()))
+                .andExpect(jsonPath("$.members[0].userName").value("Bob"));
     }
 
     @Test
@@ -219,7 +229,11 @@ class TodoControllerIntegrationTest {
                 .andExpect(jsonPath("$[0].projectId").value(project.getId().intValue()))
                 .andExpect(jsonPath("$[0].title").value("Prepare supplies"))
                 .andExpect(jsonPath("$[0].leaderIds[0]").value(leader.getId().intValue()))
-                .andExpect(jsonPath("$[0].memberIds[0]").value(member.getId().intValue()));
+                .andExpect(jsonPath("$[0].memberIds[0]").value(member.getId().intValue()))
+                .andExpect(jsonPath("$[0].leaders[0].id").value(leader.getId().intValue()))
+                .andExpect(jsonPath("$[0].leaders[0].userName").value("Alice"))
+                .andExpect(jsonPath("$[0].members[0].id").value(member.getId().intValue()))
+                .andExpect(jsonPath("$[0].members[0].userName").value("Bob"));
     }
 
     @Test
