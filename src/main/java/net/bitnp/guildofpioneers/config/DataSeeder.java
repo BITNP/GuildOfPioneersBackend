@@ -64,6 +64,9 @@ public class DataSeeder implements ApplicationRunner {
     private static final int USER_COUNT = 20;
     private static final int TICKET_COUNT = 5;
     private static final String SEED_PASSWORD = "password123";
+    private static final String ADMIN_USERNAME = "admin";
+    private static final String ADMIN_PHONE = "13800000001";
+    private static final String ADMIN_EMAIL = "admin@example.com";
     private static final String CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final int CODE_LENGTH = 12;
     private static final int TICKET_VALIDITY_DAYS = 30;
@@ -154,15 +157,16 @@ public class DataSeeder implements ApplicationRunner {
 
     /**
      * Populates the database with fake users, registration tickets, and todo data.
-     * Users are seeded only when the users table is empty, and todo projects are
-     * seeded only when the todo_projects table is empty, so existing data is never
-     * overwritten.
+     * The site admin is always seeded if missing; fake users are seeded only when
+     * the users table is empty, and todo projects are seeded only when the
+     * todo_projects table is empty, so existing data is never overwritten.
      *
      * @param args the application arguments (unused)
      */
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
+        seedAdmin();
         List<User> users = userRepository.findAll();
         if (users.isEmpty()) {
             users = seedUsers();
@@ -173,12 +177,36 @@ public class DataSeeder implements ApplicationRunner {
         seedTodoData(users);
     }
 
+    /**
+     * Creates the dedicated site admin account (with the ADMIN department) when it
+     * does not already exist, so the maintainer can log in even when the database
+     * already contains regular users.
+     */
+    private void seedAdmin() {
+        if (userRepository.findByUserNameIgnoreCase(ADMIN_USERNAME).isPresent()) {
+            return;
+        }
+        User admin = userRepository.save(User.builder()
+                .userName(ADMIN_USERNAME)
+                .phone(ADMIN_PHONE)
+                .email(ADMIN_EMAIL)
+                .password(passwordEncoder.encode(SEED_PASSWORD))
+                .build());
+        userDepartmentRepository.save(UserDepartment.builder()
+                .userId(admin.getId())
+                .department(Department.ADMIN)
+                .role(DepartmentRole.LEADER)
+                .build());
+        log.info("Seeded admin user {}", ADMIN_USERNAME);
+    }
+
     private List<User> seedUsers() {
-        Set<String> phones = new HashSet<>();
-        Set<String> userNames = new HashSet<>();
+        Set<String> phones = new HashSet<>(Set.of(ADMIN_PHONE));
+        Set<String> userNames = new HashSet<>(Set.of(ADMIN_USERNAME));
         List<User> users = new ArrayList<>();
         int studentCount = 0;
         int cloakCount = 0;
+
         for (int i = 0; i < USER_COUNT; i++) {
             String name = generateUniqueUserName(userNames);
             User user = userRepository.save(User.builder()

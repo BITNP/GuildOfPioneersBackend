@@ -71,7 +71,7 @@ public class UserService {
         User user = findByAuthentication(authentication);
         fileStorageService.storeAvatar(file, user.getId());
         log.trace("User {} updated their avatar", user.getId());
-        return toResponse(user);
+        return toFullResponse(user);
     }
 
     /**
@@ -93,7 +93,7 @@ public class UserService {
         user.setPhone(request.getPhone());
         user.setEmail(blankToNull(request.getEmail()));
         log.trace("User {} updated their profile", user.getId());
-        return toResponse(userRepository.save(user));
+        return toFullResponse(userRepository.save(user));
     }
 
     private AuthResponse toFullResponse(User user) {

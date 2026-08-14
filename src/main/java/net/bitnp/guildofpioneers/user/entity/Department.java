@@ -8,5 +8,6 @@ public enum Department {
     TECH,
     SUPPORT,
     MEDIA,
-    PRESIDIUM
+    PRESIDIUM,
+    ADMIN
 }

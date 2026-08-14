@@ -11,6 +11,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 /**
  * Handles user registration.
  */
@@ -68,6 +70,7 @@ public class AuthService {
                 .userName(user.getUserName())
                 .phone(user.getPhone())
                 .email(user.getEmail())
+                .departments(List.of())
                 .build();
     }
 

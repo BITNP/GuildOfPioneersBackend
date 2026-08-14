@@ -106,7 +106,8 @@ Keep entries sorted by path, then by HTTP method.
       "userName": "Alice",
       "avatar": "/uploads/avatars/default?v=1720000000000",
       "phone": "13800000000",
-      "email": "alice@example.com"
+      "email": "alice@example.com",
+      "departments": []
     }
     ```
 - **Error Responses**:
@@ -132,7 +133,13 @@ Keep entries sorted by path, then by HTTP method.
       "userName": "Alice",
       "avatar": "/uploads/avatars/1?v=1720000000000",
       "phone": "13800000000",
-      "email": "alice@example.com"
+      "email": "alice@example.com",
+      "departments": [
+        {
+          "department": "TECH",
+          "role": "MEMBER"
+        }
+      ]
     }
     ```
 - **Error Responses**:
@@ -176,7 +183,7 @@ Keep entries sorted by path, then by HTTP method.
       ]
     }
     ```
-  - `departments` (array of objects) - the user's department memberships; each item has `department`, which is one of `CLINIC`, `TECH`, `SUPPORT`, `MEDIA`, `PRESIDIUM`, and `role`, which is one of `LEADER`, `VICE`, `ADVISOR`, `MEMBER`.
+  - `departments` (array of objects) - the user's department memberships; each item has `department`, which is one of `CLINIC`, `TECH`, `SUPPORT`, `MEDIA`, `PRESIDIUM`, `ADMIN`, and `role`, which is one of `LEADER`, `VICE`, `ADVISOR`, `MEMBER`.
 - **Error Responses**:
   - `401 UNAUTHORIZED` - not authenticated.
 
@@ -198,7 +205,13 @@ Keep entries sorted by path, then by HTTP method.
       "userName": "Alice",
       "avatar": "/uploads/avatars/1?v=1720000000000",
       "phone": "13800000000",
-      "email": "alice@example.com"
+      "email": "alice@example.com",
+      "departments": [
+        {
+          "department": "TECH",
+          "role": "MEMBER"
+        }
+      ]
     }
     ```
 - **Error Responses**:
@@ -223,7 +236,13 @@ Keep entries sorted by path, then by HTTP method.
       "userName": "Alice",
       "avatar": "/uploads/avatars/1?v=1720000000000",
       "phone": "13800000000",
-      "email": "alice@example.com"
+      "email": "alice@example.com",
+      "departments": [
+        {
+          "department": "TECH",
+          "role": "MEMBER"
+        }
+      ]
     }
     ```
 - **Error Responses**:
@@ -515,7 +534,7 @@ Keep entries sorted by path, then by HTTP method.
       ]
     }
     ```
-  - `departments` (array of objects) - the user's department memberships; each item has `department`, which is one of `CLINIC`, `TECH`, `SUPPORT`, `MEDIA`, `PRESIDIUM`, and `role`, which is one of `LEADER`, `VICE`, `ADVISOR`, `MEMBER`.
+  - `departments` (array of objects) - the user's department memberships; each item has `department`, which is one of `CLINIC`, `TECH`, `SUPPORT`, `MEDIA`, `PRESIDIUM`, `ADMIN`, and `role`, which is one of `LEADER`, `VICE`, `ADVISOR`, `MEMBER`.
 - **Error Responses**:
   - `401 UNAUTHORIZED` - not authenticated.
   - `404 NOT_FOUND` - no user with the given id exists.
