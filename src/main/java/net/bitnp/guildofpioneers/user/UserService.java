@@ -1,8 +1,10 @@
 package net.bitnp.guildofpioneers.user;
 
 import lombok.extern.slf4j.Slf4j;
+import net.bitnp.guildofpioneers.common.PermissionService;
 import net.bitnp.guildofpioneers.storage.FileStorageService;
 import net.bitnp.guildofpioneers.user.entity.User;
+import net.bitnp.guildofpioneers.user.exception.PermissionDeniedException;
 import net.bitnp.guildofpioneers.user.exception.PhoneAlreadyExistsException;
 import net.bitnp.guildofpioneers.user.exception.UserNotFoundException;
 import net.bitnp.guildofpioneers.user.repository.UserDepartmentRepository;
@@ -16,6 +18,8 @@ import java.util.List;
 
 /**
  * Handles profile retrieval, profile updates, and avatar management for users.
+ * Profile and avatar editing is available to the user themselves or to admins,
+ * who may edit any user.
  */
 @Slf4j
 @Service
@@ -24,15 +28,18 @@ public class UserService {
     private final UserRepository userRepository;
     private final UserDepartmentRepository userDepartmentRepository;
     private final FileStorageService fileStorageService;
+    private final PermissionService permissionService;
 
     public UserService(
             UserRepository userRepository,
             UserDepartmentRepository userDepartmentRepository,
-            FileStorageService fileStorageService
+            FileStorageService fileStorageService,
+            PermissionService permissionService
     ) {
         this.userRepository = userRepository;
         this.userDepartmentRepository = userDepartmentRepository;
         this.fileStorageService = fileStorageService;
+        this.permissionService = permissionService;
     }
 
     /**
@@ -75,6 +82,25 @@ public class UserService {
     }
 
     /**
+     * Replaces the avatar of the user with the given id. The target user may edit
+     * their own avatar, and admins may edit anyone's.
+     *
+     * @param userId         the target user's id
+     * @param file           the new avatar image
+     * @param authentication the current authentication
+     * @return the updated target profile
+     * @throws UserNotFoundException    if the target user does not exist
+     * @throws PermissionDeniedException if the current user is neither the target nor an admin
+     */
+    public AuthResponse updateAvatar(Long userId, MultipartFile file, Authentication authentication) {
+        User target = findUser(userId);
+        requireSelfOrAdmin(target, authentication);
+        fileStorageService.storeAvatar(file, target.getId());
+        log.trace("User {} avatar updated by {}", target.getId(), authentication.getName());
+        return toFullResponse(target);
+    }
+
+    /**
      * Updates the authenticated user's phone and email. The username is not editable.
      * A phone already owned by the user is allowed unchanged; only a genuinely new
      * value is checked for uniqueness.
@@ -87,12 +113,47 @@ public class UserService {
     @Transactional
     public AuthResponse updateProfile(Authentication authentication, UpdateProfileRequest request) {
         User user = findByAuthentication(authentication);
+        return applyProfileUpdate(user, request);
+    }
+
+    /**
+     * Updates the phone and email of the user with the given id. The target user may
+     * edit their own profile, and admins may edit anyone's.
+     *
+     * @param userId         the target user's id
+     * @param request        the validated profile data
+     * @param authentication the current authentication
+     * @return the updated target profile
+     * @throws UserNotFoundException     if the target user does not exist
+     * @throws PermissionDeniedException if the current user is neither the target nor an admin
+     * @throws PhoneAlreadyExistsException if the new phone belongs to another user
+     */
+    @Transactional
+    public AuthResponse updateProfile(Long userId, UpdateProfileRequest request, Authentication authentication) {
+        User target = findUser(userId);
+        requireSelfOrAdmin(target, authentication);
+        return applyProfileUpdate(target, request);
+    }
+
+    private void requireSelfOrAdmin(User target, Authentication authentication) {
+        User current = permissionService.currentUser(authentication);
+        if (!permissionService.isAdminOr(current, () -> target.getId().equals(current.getId()))) {
+            throw new PermissionDeniedException("You are not allowed to edit this user's profile");
+        }
+    }
+
+    private User findUser(Long id) {
+        return userRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException(id));
+    }
+
+    private AuthResponse applyProfileUpdate(User user, UpdateProfileRequest request) {
         if (!request.getPhone().equals(user.getPhone()) && userRepository.existsByPhone(request.getPhone())) {
             throw new PhoneAlreadyExistsException(request.getPhone());
         }
         user.setPhone(request.getPhone());
         user.setEmail(blankToNull(request.getEmail()));
-        log.trace("User {} updated their profile", user.getId());
+        log.trace("Profile of user {} updated", user.getId());
         return toFullResponse(userRepository.save(user));
     }
 

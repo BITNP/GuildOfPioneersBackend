@@ -1,6 +1,7 @@
 package net.bitnp.guildofpioneers.todo;
 
 import lombok.extern.slf4j.Slf4j;
+import net.bitnp.guildofpioneers.common.PermissionService;
 import net.bitnp.guildofpioneers.storage.FileStorageService;
 import net.bitnp.guildofpioneers.todo.entity.TodoAction;
 import net.bitnp.guildofpioneers.todo.entity.TodoProject;
@@ -19,7 +20,6 @@ import net.bitnp.guildofpioneers.todo.repository.TodoTaskLeaderRepository;
 import net.bitnp.guildofpioneers.todo.repository.TodoTaskMemberRepository;
 import net.bitnp.guildofpioneers.todo.repository.TodoTaskRepository;
 import net.bitnp.guildofpioneers.user.entity.User;
-import net.bitnp.guildofpioneers.user.exception.UserNotFoundException;
 import net.bitnp.guildofpioneers.user.repository.UserRepository;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -36,7 +36,8 @@ import java.util.stream.Collectors;
  * Provides access to the three-layer todo hierarchy: projects, tasks, and actions.
  * Read methods expose the hierarchy, while the {@code touch*} methods centralize
  * the "updated time" invariant that propagates activity up the hierarchy. Project
- * title and description editing is available to project leaders.
+ * title and description editing is available to project leaders; admins override
+ * that rule via {@link PermissionService}.
  */
 @Slf4j
 @Service
@@ -52,6 +53,7 @@ public class TodoService {
     private final TodoActionMemberRepository todoActionMemberRepository;
     private final FileStorageService fileStorageService;
     private final UserRepository userRepository;
+    private final PermissionService permissionService;
 
     public TodoService(
             TodoProjectRepository todoProjectRepository,
@@ -63,7 +65,8 @@ public class TodoService {
             TodoTaskMemberRepository todoTaskMemberRepository,
             TodoActionMemberRepository todoActionMemberRepository,
             FileStorageService fileStorageService,
-            UserRepository userRepository
+            UserRepository userRepository,
+            PermissionService permissionService
     ) {
         this.todoProjectRepository = todoProjectRepository;
         this.todoTaskRepository = todoTaskRepository;
@@ -75,6 +78,7 @@ public class TodoService {
         this.todoActionMemberRepository = todoActionMemberRepository;
         this.fileStorageService = fileStorageService;
         this.userRepository = userRepository;
+        this.permissionService = permissionService;
     }
 
     /**
@@ -172,7 +176,8 @@ public class TodoService {
 
     /**
      * Updates a project's title and description. Only a leader of the project
-     * may edit it; the change bumps the project's updated date.
+     * may edit it, unless the current user is an admin, in which case any
+     * project may be edited; the change bumps the project's updated date.
      *
      * @param projectId      the project id
      * @param request        the validated title and description
@@ -180,14 +185,16 @@ public class TodoService {
      * @return the updated project, with member ids but without resolved user summaries
      * @throws TodoProjectNotFoundException if the project does not exist
      * @throws NotProjectLeaderException    if the current user is not a project leader
-     * @throws UserNotFoundException        if the current user cannot be resolved
      */
     @Transactional
     public TodoProjectUpdateResponse updateProject(
             Long projectId, UpdateProjectRequest request, Authentication authentication
     ) {
         TodoProject project = findProject(projectId);
-        requireProjectLeader(projectId, authentication);
+        User user = permissionService.currentUser(authentication);
+        if (!permissionService.isAdminOr(user, () -> isProjectLeader(projectId, user))) {
+            throw new NotProjectLeaderException(projectId);
+        }
         project.setTitle(request.getTitle());
         project.setDescription(blankToNull(request.getDescription()));
         project.setUpdatedDate(Instant.now());
@@ -195,13 +202,8 @@ public class TodoService {
         return toProjectUpdateResponse(todoProjectRepository.save(project));
     }
 
-    private void requireProjectLeader(Long projectId, Authentication authentication) {
-        User user = userRepository.findByUserNameIgnoreCase(authentication.getName())
-                .orElseThrow(() -> new UserNotFoundException(authentication.getName()));
-        boolean isLeader = todoProjectLeaderRepository.existsById(new TodoProjectLeaderKey(projectId, user.getId()));
-        if (!isLeader) {
-            throw new NotProjectLeaderException(projectId);
-        }
+    private boolean isProjectLeader(Long projectId, User user) {
+        return todoProjectLeaderRepository.existsById(new TodoProjectLeaderKey(projectId, user.getId()));
     }
 
     private String blankToNull(String value) {

@@ -21,7 +21,11 @@ import net.bitnp.guildofpioneers.todo.repository.TodoProjectRepository;
 import net.bitnp.guildofpioneers.todo.repository.TodoTaskLeaderRepository;
 import net.bitnp.guildofpioneers.todo.repository.TodoTaskMemberRepository;
 import net.bitnp.guildofpioneers.todo.repository.TodoTaskRepository;
+import net.bitnp.guildofpioneers.user.entity.Department;
+import net.bitnp.guildofpioneers.user.entity.DepartmentRole;
 import net.bitnp.guildofpioneers.user.entity.User;
+import net.bitnp.guildofpioneers.user.entity.UserDepartment;
+import net.bitnp.guildofpioneers.user.repository.UserDepartmentRepository;
 import net.bitnp.guildofpioneers.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,7 +49,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Integration tests for the read-only todo endpoints.
+ * Integration tests for the todo endpoints, including project editing
+ * permissions for leaders and admins.
  */
 @SpringBootTest(properties = "app.seed-data=false")
 @AutoConfigureMockMvc
@@ -61,6 +66,9 @@ class TodoControllerIntegrationTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private UserDepartmentRepository userDepartmentRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -357,6 +365,49 @@ class TodoControllerIntegrationTest {
                                 }
                                 """))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminUpdatesAnyProject_notProjectLeader_returnsUpdatedProject() throws Exception {
+        User admin = userRepository.save(User.builder()
+                .userName("Admin")
+                .phone("13000000002")
+                .email("admin@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+        userDepartmentRepository.save(UserDepartment.builder()
+                .userId(admin.getId())
+                .department(Department.ADMIN)
+                .role(DepartmentRole.LEADER)
+                .build());
+
+        MvcResult adminLogin = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "Admin",
+                                  "password": "%s"
+                                }
+                                """.formatted(PASSWORD)))
+                .andExpect(status().isOk())
+                .andReturn();
+        MockHttpSession adminSession = (MockHttpSession) adminLogin.getRequest().getSession();
+
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+                        .session(adminSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Autumn Camp 2026",
+                                  "description": "Edited by admin"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(project.getId().intValue()))
+                .andExpect(jsonPath("$.title").value("Autumn Camp 2026"))
+                .andExpect(jsonPath("$.description").value("Edited by admin"))
+                .andExpect(jsonPath("$.leaders").doesNotExist())
+                .andExpect(jsonPath("$.members").doesNotExist());
     }
 
     @Test

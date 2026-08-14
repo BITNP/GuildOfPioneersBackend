@@ -13,6 +13,7 @@ import net.bitnp.guildofpioneers.todo.exception.TodoTaskNotFoundException;
 import net.bitnp.guildofpioneers.user.exception.PhoneAlreadyExistsException;
 import net.bitnp.guildofpioneers.user.exception.UserNameAlreadyExistsException;
 import net.bitnp.guildofpioneers.user.exception.UserNotFoundException;
+import net.bitnp.guildofpioneers.user.exception.PermissionDeniedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -105,6 +106,14 @@ public class GlobalExceptionHandler {
             UserNotFoundException ex, HttpServletRequest request
     ) {
         return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(PermissionDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handlePermissionDenied(
+            PermissionDeniedException ex, HttpServletRequest request
+    ) {
+        log.trace("Permission denied: {}", ex.getMessage());
+        return build(HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage(), request);
     }
 
     @ExceptionHandler(MissingServletRequestPartException.class)

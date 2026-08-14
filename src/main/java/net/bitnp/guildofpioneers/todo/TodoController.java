@@ -14,7 +14,8 @@ import java.util.List;
 
 /**
  * Endpoints for the todo hierarchy: projects, tasks, and actions.
- * Projects are readable by any authenticated user and editable by their leaders.
+ * Projects are readable by any authenticated user and editable by their leaders;
+ * members of the ADMIN department may edit any project.
  */
 @RestController
 @RequestMapping("/api/todo")
@@ -45,7 +46,8 @@ public class TodoController {
     }
 
     /**
-     * Updates a project's title and description. Only project leaders are allowed.
+     * Updates a project's title and description. Project leaders are allowed,
+     * as is any user in the ADMIN department.
      *
      * @param projectId      the project id
      * @param request        the validated title and description

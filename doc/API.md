@@ -397,8 +397,8 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `PUT /api/todo/projects/{projectId}`
 
-- **Description**: Updates a project's title and description. Only the project's leaders may edit it. The project's `updatedDate` is bumped to the current time. The response carries the project's own fields and the member user ids only; user name/avatar summaries are resolved by the `GET` endpoints.
-- **Authentication**: Authenticated session. The current user must be a leader of the project.
+- **Description**: Updates a project's title and description. The project's leaders may edit it, and so may any user in the `ADMIN` department (who may edit any project). The project's `updatedDate` is bumped to the current time. The response carries the project's own fields and the member user ids only; user name/avatar summaries are resolved by the `GET` endpoints.
+- **Authentication**: Authenticated session. The current user must be a leader of the project, or a member of the `ADMIN` department.
 - **Request Body**: `UpdateProjectRequest`:
   - `title` (string, required) - the project title; must not be blank.
   - `description` (string, optional) - the project description; may be `null` or empty to clear it.
@@ -539,7 +539,57 @@ Keep entries sorted by path, then by HTTP method.
   - `401 UNAUTHORIZED` - not authenticated.
   - `404 NOT_FOUND` - no user with the given id exists.
 
-### `GET /uploads/{namespace}/{fileName}`
+### `PUT /api/users/{id}`
+
+- **Description**: Updates the phone and email of the user with the given id. The target user may edit their own profile, and any user in the `ADMIN` department may edit any profile. The username is not editable. A phone already owned by the target user is allowed unchanged; only a genuinely new value is checked for uniqueness.
+- **Authentication**: Authenticated session. The current user must be the target user, or a member of the `ADMIN` department.
+- **Request Body**: `UpdateProfileRequest`:
+  - `phone` (string, required) - phone number; must be a Chinese mobile number (`1[3-9]` followed by 9 digits).
+  - `email` (string, optional) - must be a valid email when provided; may be `null` or empty to clear it.
+- **Path Parameters**: `id` (integer) - the target user's id.
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**:
+    ```json
+    {
+      "id": 2,
+      "userName": "Bob",
+      "avatar": "/uploads/avatars/2?v=1720000000000",
+      "phone": "13900000000",
+      "email": "bob@example.com",
+      "departments": [
+        {
+          "department": "TECH",
+          "role": "MEMBER"
+        }
+      ]
+    }
+    ```
+- **Error Responses**:
+  - `400 BAD_REQUEST` - validation failed (e.g. invalid phone format or invalid email).
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `403 FORBIDDEN` - the current user is neither the target user nor a member of the `ADMIN` department.
+  - `404 NOT_FOUND` - no user with the given id exists.
+  - `409 CONFLICT` - the new phone is already registered to another user.
+
+### `PUT /api/users/{id}/avatar`
+
+- **Description**: Replaces the avatar of the user with the given id. The target user may update their own avatar, and any user in the `ADMIN` department may update any avatar. The image is stored through the Veil storage layer, keyed by the target user's id in the `avatars` namespace, and the `avatar` field of the response is the public path `/uploads/avatars/{userId}` with a `?v=` cache-busting version.
+- **Authentication**: Authenticated session. The current user must be the target user, or a member of the `ADMIN` department.
+- **Request Body**: multipart form-data:
+  - `file` (binary, required) - avatar image. Allowed types: `image/jpeg`, `image/png`, `image/webp`, `image/gif`. Max size 5MB.
+- **Path Parameters**: `id` (integer) - the target user's id.
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**: the updated target profile (same shape as `PUT /api/users/{id}`).
+- **Error Responses**:
+  - `400 BAD_REQUEST` - `file` part missing, empty, or unsupported image type.
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `403 FORBIDDEN` - the current user is neither the target user nor a member of the `ADMIN` department.
+  - `404 NOT_FOUND` - no user with the given id exists.
+  - `413 CONTENT_TOO_LARGE` - file exceeds the maximum allowed size.
 
 - **Description**: Serves a stored file from the Veil storage layer via a controller so authorization can be applied later. The final path segment is the object key (an extension is optional and ignored for lookup), e.g. `GET /uploads/avatars/1` serves the avatar with key `1`. Public for the `avatars` namespace. The `avatars` namespace additionally holds the reserved key `default`: the default avatar served to users without their own avatar, refreshed from the configured source image (`app.default-avatar`, active while `app.default-avatar-enabled=true`) at every startup.
 - **Authentication**: None.
