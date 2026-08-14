@@ -1,7 +1,11 @@
 package net.bitnp.guildofpioneers.todo;
 
+import jakarta.validation.Valid;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -9,7 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * Read-only endpoints for the todo hierarchy: projects, tasks, and actions.
+ * Endpoints for the todo hierarchy: projects, tasks, and actions.
+ * Projects are readable by any authenticated user and editable by their leaders.
  */
 @RestController
 @RequestMapping("/api/todo")
@@ -37,6 +42,23 @@ public class TodoController {
     @GetMapping("/projects/{projectId}")
     public TodoProjectResponse getProject(@PathVariable Long projectId) {
         return todoService.getProject(projectId);
+    }
+
+    /**
+     * Updates a project's title and description. Only project leaders are allowed.
+     *
+     * @param projectId      the project id
+     * @param request        the validated title and description
+     * @param authentication the current authentication
+     * @return the updated project, without resolved user summaries
+     */
+    @PutMapping("/projects/{projectId}")
+    public TodoProjectUpdateResponse updateProject(
+            @PathVariable Long projectId,
+            @Valid @RequestBody UpdateProjectRequest request,
+            Authentication authentication
+    ) {
+        return todoService.updateProject(projectId, request, authentication);
     }
 
     /**

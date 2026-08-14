@@ -370,6 +370,37 @@ Keep entries sorted by path, then by HTTP method.
   - `401 UNAUTHORIZED` - not authenticated.
   - `404 NOT_FOUND` - the project does not exist.
 
+### `PUT /api/todo/projects/{projectId}`
+
+- **Description**: Updates a project's title and description. Only the project's leaders may edit it. The project's `updatedDate` is bumped to the current time. The response carries the project's own fields and the member user ids only; user name/avatar summaries are resolved by the `GET` endpoints.
+- **Authentication**: Authenticated session. The current user must be a leader of the project.
+- **Request Body**: `UpdateProjectRequest`:
+  - `title` (string, required) - the project title; must not be blank.
+  - `description` (string, optional) - the project description; may be `null` or empty to clear it.
+- **Path Parameters**: `projectId` (integer) - the project's id.
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**: `TodoProjectUpdateResponse` - the updated project without resolved user summaries.
+    ```json
+    {
+      "id": 1,
+      "title": "Autumn Camp 2026",
+      "cover": "/uploads/project_covers/1?v=1720000000000",
+      "description": "Annual autumn camp",
+      "createdDate": "2026-08-13T08:00:00.000Z",
+      "updatedDate": "2026-08-13T10:00:00.000Z",
+      "endDate": null,
+      "leaderIds": [1],
+      "memberIds": [2, 3]
+    }
+    ```
+- **Error Responses**:
+  - `400 BAD_REQUEST` - `title` missing or blank.
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `403 FORBIDDEN` - the current user is not a leader of the project.
+  - `404 NOT_FOUND` - the project does not exist.
+
 ### `GET /api/todo/tasks?projectId={projectId}`
 
 - **Description**: Lists the tasks of a project, most recently updated first. `leaders` and `members` are user summaries (id, userName, avatar) matching the order of `leaderIds` and `memberIds`; deleted users are skipped.

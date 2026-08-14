@@ -4,7 +4,9 @@ import lombok.extern.slf4j.Slf4j;
 import net.bitnp.guildofpioneers.storage.FileStorageService;
 import net.bitnp.guildofpioneers.todo.entity.TodoAction;
 import net.bitnp.guildofpioneers.todo.entity.TodoProject;
+import net.bitnp.guildofpioneers.todo.entity.TodoProjectLeaderKey;
 import net.bitnp.guildofpioneers.todo.entity.TodoTask;
+import net.bitnp.guildofpioneers.todo.exception.NotProjectLeaderException;
 import net.bitnp.guildofpioneers.todo.exception.TodoActionNotFoundException;
 import net.bitnp.guildofpioneers.todo.exception.TodoProjectNotFoundException;
 import net.bitnp.guildofpioneers.todo.exception.TodoTaskNotFoundException;
@@ -17,7 +19,9 @@ import net.bitnp.guildofpioneers.todo.repository.TodoTaskLeaderRepository;
 import net.bitnp.guildofpioneers.todo.repository.TodoTaskMemberRepository;
 import net.bitnp.guildofpioneers.todo.repository.TodoTaskRepository;
 import net.bitnp.guildofpioneers.user.entity.User;
+import net.bitnp.guildofpioneers.user.exception.UserNotFoundException;
 import net.bitnp.guildofpioneers.user.repository.UserRepository;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,7 +35,8 @@ import java.util.stream.Collectors;
 /**
  * Provides access to the three-layer todo hierarchy: projects, tasks, and actions.
  * Read methods expose the hierarchy, while the {@code touch*} methods centralize
- * the "updated time" invariant that propagates activity up the hierarchy.
+ * the "updated time" invariant that propagates activity up the hierarchy. Project
+ * title and description editing is available to project leaders.
  */
 @Slf4j
 @Service
@@ -166,6 +171,44 @@ public class TodoService {
     }
 
     /**
+     * Updates a project's title and description. Only a leader of the project
+     * may edit it; the change bumps the project's updated date.
+     *
+     * @param projectId      the project id
+     * @param request        the validated title and description
+     * @param authentication the current authentication
+     * @return the updated project, with member ids but without resolved user summaries
+     * @throws TodoProjectNotFoundException if the project does not exist
+     * @throws NotProjectLeaderException    if the current user is not a project leader
+     * @throws UserNotFoundException        if the current user cannot be resolved
+     */
+    @Transactional
+    public TodoProjectUpdateResponse updateProject(
+            Long projectId, UpdateProjectRequest request, Authentication authentication
+    ) {
+        TodoProject project = findProject(projectId);
+        requireProjectLeader(projectId, authentication);
+        project.setTitle(request.getTitle());
+        project.setDescription(blankToNull(request.getDescription()));
+        project.setUpdatedDate(Instant.now());
+        log.trace("Project {} updated", projectId);
+        return toProjectUpdateResponse(todoProjectRepository.save(project));
+    }
+
+    private void requireProjectLeader(Long projectId, Authentication authentication) {
+        User user = userRepository.findByUserNameIgnoreCase(authentication.getName())
+                .orElseThrow(() -> new UserNotFoundException(authentication.getName()));
+        boolean isLeader = todoProjectLeaderRepository.existsById(new TodoProjectLeaderKey(projectId, user.getId()));
+        if (!isLeader) {
+            throw new NotProjectLeaderException(projectId);
+        }
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
+    }
+
+    /**
      * Marks a task as updated and propagates the touch to its owning project.
      *
      * @param taskId the task id
@@ -224,6 +267,20 @@ public class TodoService {
                 .memberIds(memberIds)
                 .leaders(userSummaries(leaderIds))
                 .members(userSummaries(memberIds))
+                .build();
+    }
+
+    private TodoProjectUpdateResponse toProjectUpdateResponse(TodoProject project) {
+        return TodoProjectUpdateResponse.builder()
+                .id(project.getId())
+                .title(project.getTitle())
+                .cover(fileStorageService.projectCoverUrl(project.getId()))
+                .description(project.getDescription())
+                .createdDate(project.getCreatedDate())
+                .updatedDate(project.getUpdatedDate())
+                .endDate(project.getEndDate())
+                .leaderIds(projectLeaderIds(project.getId()))
+                .memberIds(projectMemberIds(project.getId()))
                 .build();
     }
 

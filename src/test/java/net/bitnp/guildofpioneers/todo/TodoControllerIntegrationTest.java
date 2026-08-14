@@ -40,6 +40,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -277,6 +278,112 @@ class TodoControllerIntegrationTest {
                 .andExpect(status().isNotFound());
         mockMvc.perform(get("/api/todo/actions/{actionId}", 9999L).session(session))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void leaderUpdatesProject_returnsUpdatedProject() throws Exception {
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Autumn Camp 2026",
+                                  "description": "Annual autumn camp, new edition"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(project.getId().intValue()))
+                .andExpect(jsonPath("$.title").value("Autumn Camp 2026"))
+                .andExpect(jsonPath("$.description").value("Annual autumn camp, new edition"))
+                .andExpect(jsonPath("$.leaderIds[0]").value(leader.getId().intValue()))
+                .andExpect(jsonPath("$.memberIds[0]").value(member.getId().intValue()))
+                .andExpect(jsonPath("$.leaders").doesNotExist())
+                .andExpect(jsonPath("$.members").doesNotExist());
+    }
+
+    @Test
+    void leaderUpdatesProject_clearsBlankDescription() throws Exception {
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Autumn Camp 2026",
+                                  "description": "   "
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Autumn Camp 2026"))
+                .andExpect(jsonPath("$.description").value(nullValue()))
+                .andExpect(jsonPath("$.leaders").doesNotExist())
+                .andExpect(jsonPath("$.members").doesNotExist());
+    }
+
+    @Test
+    void updateProject_withBlankTitle_returnsBadRequest() throws Exception {
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "  ",
+                                  "description": "Annual autumn camp"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateProject_byNonLeader_returnsForbidden() throws Exception {
+        MvcResult memberLogin = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "Bob",
+                                  "password": "%s"
+                                }
+                                """.formatted(PASSWORD)))
+                .andExpect(status().isOk())
+                .andReturn();
+        MockHttpSession memberSession = (MockHttpSession) memberLogin.getRequest().getSession();
+
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+                        .session(memberSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Hijacked",
+                                  "description": "Should be rejected"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void updateProject_missingProject_returnsNotFound() throws Exception {
+        mockMvc.perform(put("/api/todo/projects/{projectId}", 9999L)
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Autumn Camp 2026",
+                                  "description": "Annual autumn camp"
+                                }
+                                """))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void updateProject_unauthenticatedRequest_isRejected() throws Exception {
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Autumn Camp 2026",
+                                  "description": "Annual autumn camp"
+                                }
+                                """))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

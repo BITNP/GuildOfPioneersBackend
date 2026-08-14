@@ -6,6 +6,7 @@ import net.bitnp.guildofpioneers.storage.InvalidFileTypeException;
 import net.bitnp.guildofpioneers.storage.StoredFileNotFoundException;
 import net.bitnp.guildofpioneers.ticket.TicketExpiredException;
 import net.bitnp.guildofpioneers.ticket.TicketNotFoundException;
+import net.bitnp.guildofpioneers.todo.exception.NotProjectLeaderException;
 import net.bitnp.guildofpioneers.todo.exception.TodoActionNotFoundException;
 import net.bitnp.guildofpioneers.todo.exception.TodoProjectNotFoundException;
 import net.bitnp.guildofpioneers.todo.exception.TodoTaskNotFoundException;
@@ -89,6 +90,14 @@ public class GlobalExceptionHandler {
             RuntimeException ex, HttpServletRequest request
     ) {
         return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(NotProjectLeaderException.class)
+    public ResponseEntity<Map<String, Object>> handleNotProjectLeader(
+            NotProjectLeaderException ex, HttpServletRequest request
+    ) {
+        log.trace("Project modification rejected: {}", ex.getMessage());
+        return build(HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage(), request);
     }
 
     @ExceptionHandler(UserNotFoundException.class)
