@@ -453,6 +453,30 @@ Keep entries sorted by path, then by HTTP method.
   - `401 UNAUTHORIZED` - not authenticated.
   - `404 NOT_FOUND` - the task does not exist.
 
+### `GET /api/users/{id}`
+
+- **Description**: Returns the profile of a user by id. No privacy filtering is applied yet, so the full profile (including phone and email) is returned.
+- **Authentication**: Authenticated session.
+- **Request Body**: -
+- **Path Parameters**: `id` (integer) - the user's id.
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**:
+    ```json
+    {
+      "id": 1,
+      "userName": "Alice",
+      "avatar": "/uploads/avatars/1?v=1720000000000",
+      "phone": "13800000000",
+      "email": "alice@example.com",
+      "department": "Technology"
+    }
+    ```
+- **Error Responses**:
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `404 NOT_FOUND` - no user with the given id exists.
+
 ### `GET /uploads/{namespace}/{fileName}`
 
 - **Description**: Serves a stored file from the Veil storage layer via a controller so authorization can be applied later. The final path segment is the object key (an extension is optional and ignored for lookup), e.g. `GET /uploads/avatars/1` serves the avatar with key `1`. Public for the `avatars` namespace. The `avatars` namespace additionally holds the reserved key `default`: the default avatar served to users without their own avatar, refreshed from the configured source image (`app.default-avatar`, active while `app.default-avatar-enabled=true`) at every startup.

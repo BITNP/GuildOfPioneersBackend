@@ -11,6 +11,7 @@ import net.bitnp.guildofpioneers.todo.exception.TodoProjectNotFoundException;
 import net.bitnp.guildofpioneers.todo.exception.TodoTaskNotFoundException;
 import net.bitnp.guildofpioneers.user.exception.PhoneAlreadyExistsException;
 import net.bitnp.guildofpioneers.user.exception.UserNameAlreadyExistsException;
+import net.bitnp.guildofpioneers.user.exception.UserNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -86,6 +87,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({TodoProjectNotFoundException.class, TodoTaskNotFoundException.class, TodoActionNotFoundException.class})
     public ResponseEntity<Map<String, Object>> handleTodoNotFound(
             RuntimeException ex, HttpServletRequest request
+    ) {
+        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleUserNotFound(
+            UserNotFoundException ex, HttpServletRequest request
     ) {
         return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request);
     }

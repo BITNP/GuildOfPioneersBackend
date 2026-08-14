@@ -4,6 +4,7 @@ import net.bitnp.guildofpioneers.storage.FileStorageService;
 import net.bitnp.guildofpioneers.user.entity.User;
 import net.bitnp.guildofpioneers.user.entity.UserDepartment;
 import net.bitnp.guildofpioneers.user.exception.PhoneAlreadyExistsException;
+import net.bitnp.guildofpioneers.user.exception.UserNotFoundException;
 import net.bitnp.guildofpioneers.user.repository.UserDepartmentRepository;
 import net.bitnp.guildofpioneers.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -77,6 +78,55 @@ class UserServiceTest {
         AuthResponse response = userService.getCurrentUser(authentication);
 
         assertThat(response.getDepartment()).isNull();
+    }
+
+    @Test
+    void getUser_returnsProfileWithDepartment() {
+        User user = User.builder()
+                .id(7L)
+                .userName("Alice")
+                .phone("13800000000")
+                .email("alice@example.com")
+                .password("encoded-hash")
+                .build();
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+        when(userDepartmentRepository.findById(7L)).thenReturn(
+                Optional.of(UserDepartment.builder().userId(7L).department("Technology").build())
+        );
+        when(fileStorageService.avatarUrl(7L)).thenReturn("/uploads/avatars/7?v=1720000000000");
+
+        AuthResponse response = userService.getUser(7L);
+
+        assertThat(response.getId()).isEqualTo(7L);
+        assertThat(response.getUserName()).isEqualTo("Alice");
+        assertThat(response.getPhone()).isEqualTo("13800000000");
+        assertThat(response.getEmail()).isEqualTo("alice@example.com");
+        assertThat(response.getAvatar()).isEqualTo("/uploads/avatars/7?v=1720000000000");
+        assertThat(response.getDepartment()).isEqualTo("Technology");
+    }
+
+    @Test
+    void getUser_returnsNullDepartmentWhenNotAssigned() {
+        User user = User.builder()
+                .id(7L)
+                .userName("Alice")
+                .phone("13800000000")
+                .password("encoded-hash")
+                .build();
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+        when(userDepartmentRepository.findById(7L)).thenReturn(Optional.empty());
+
+        AuthResponse response = userService.getUser(7L);
+
+        assertThat(response.getDepartment()).isNull();
+    }
+
+    @Test
+    void getUser_throwsWhenUserMissing() {
+        when(userRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.getUser(999L))
+                .isInstanceOf(UserNotFoundException.class);
     }
 
     @Test

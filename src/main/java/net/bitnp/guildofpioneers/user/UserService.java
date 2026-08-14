@@ -42,12 +42,21 @@ public class UserService {
      */
     public AuthResponse getCurrentUser(Authentication authentication) {
         User user = findByAuthentication(authentication);
-        String department = userDepartmentRepository.findById(user.getId())
-                .map(UserDepartment::getDepartment)
-                .orElse(null);
-        AuthResponse response = toResponse(user);
-        response.setDepartment(department);
-        return response;
+        return toFullResponse(user);
+    }
+
+    /**
+     * Returns the profile of a user by id.
+     *
+     * @param id the user's id
+     * @return the user's profile
+     * @throws UserNotFoundException if no user with the given id exists
+     */
+    @Transactional(readOnly = true)
+    public AuthResponse getUser(Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException(id));
+        return toFullResponse(user);
     }
 
     /**
@@ -84,6 +93,15 @@ public class UserService {
         user.setEmail(blankToNull(request.getEmail()));
         log.trace("User {} updated their profile", user.getId());
         return toResponse(userRepository.save(user));
+    }
+
+    private AuthResponse toFullResponse(User user) {
+        String department = userDepartmentRepository.findById(user.getId())
+                .map(UserDepartment::getDepartment)
+                .orElse(null);
+        AuthResponse response = toResponse(user);
+        response.setDepartment(department);
+        return response;
     }
 
     private User findByAuthentication(Authentication authentication) {
