@@ -24,6 +24,8 @@ import net.bitnp.guildofpioneers.todo.repository.TodoProjectRepository;
 import net.bitnp.guildofpioneers.todo.repository.TodoTaskLeaderRepository;
 import net.bitnp.guildofpioneers.todo.repository.TodoTaskMemberRepository;
 import net.bitnp.guildofpioneers.todo.repository.TodoTaskRepository;
+import net.bitnp.guildofpioneers.user.entity.Department;
+import net.bitnp.guildofpioneers.user.entity.DepartmentRole;
 import net.bitnp.guildofpioneers.user.entity.User;
 import net.bitnp.guildofpioneers.user.entity.UserCloak;
 import net.bitnp.guildofpioneers.user.entity.UserDepartment;
@@ -79,8 +81,13 @@ public class DataSeeder implements ApplicationRunner {
             "HePing", "GaoYuan", "LinXiao", "LuoFei", "ZhengTian"
     };
 
-    private static final String[] DEPARTMENTS = {
-            "Technology", "Media", "Outreach", "Operations", "Secretariat"
+    private static final Department[] DEPARTMENTS = {
+            Department.CLINIC, Department.TECH, Department.SUPPORT,
+            Department.MEDIA, Department.PRESIDIUM
+    };
+
+    private static final DepartmentRole[] ROLES = {
+            DepartmentRole.MEMBER, DepartmentRole.LEADER
     };
 
     private static final String[] PROJECT_TITLES = {
@@ -190,10 +197,23 @@ public class DataSeeder implements ApplicationRunner {
                 studentCount++;
             }
             if (random.nextBoolean()) {
+                Department firstDepartment = DEPARTMENTS[random.nextInt(DEPARTMENTS.length)];
                 userDepartmentRepository.save(UserDepartment.builder()
                         .userId(user.getId())
-                        .department(DEPARTMENTS[random.nextInt(DEPARTMENTS.length)])
+                        .department(firstDepartment)
+                        .role(ROLES[random.nextInt(ROLES.length)])
                         .build());
+                if (random.nextInt(4) == 0) {
+                    Department secondDepartment = firstDepartment;
+                    while (secondDepartment == firstDepartment) {
+                        secondDepartment = DEPARTMENTS[random.nextInt(DEPARTMENTS.length)];
+                    }
+                    userDepartmentRepository.save(UserDepartment.builder()
+                            .userId(user.getId())
+                            .department(secondDepartment)
+                            .role(DepartmentRole.MEMBER)
+                            .build());
+                }
             }
             if (random.nextBoolean()) {
                 userCloakRepository.save(UserCloak.builder()

@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
+
 /**
  * Response body describing the current authenticated user.
  */
@@ -21,5 +23,5 @@ public class AuthResponse {
     private String avatar;
     private String phone;
     private String email;
-    private String department;
+    private List<UserDepartmentDto> departments;
 }

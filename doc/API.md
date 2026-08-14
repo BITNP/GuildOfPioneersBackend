@@ -168,9 +168,15 @@ Keep entries sorted by path, then by HTTP method.
       "avatar": "/uploads/avatars/1?v=1720000000000",
       "phone": "13800000000",
       "email": "alice@example.com",
-      "department": "Technology"
+      "departments": [
+        {
+          "department": "CLINIC",
+          "role": "MEMBER"
+        }
+      ]
     }
     ```
+  - `departments` (array of objects) - the user's department memberships; each item has `department`, which is one of `CLINIC`, `TECH`, `SUPPORT`, `MEDIA`, `PRESIDIUM`, and `role`, which is one of `LEADER`, `VICE`, `ADVISOR`, `MEMBER`.
 - **Error Responses**:
   - `401 UNAUTHORIZED` - not authenticated.
 
@@ -501,9 +507,15 @@ Keep entries sorted by path, then by HTTP method.
       "avatar": "/uploads/avatars/1?v=1720000000000",
       "phone": "13800000000",
       "email": "alice@example.com",
-      "department": "Technology"
+      "departments": [
+        {
+          "department": "CLINIC",
+          "role": "MEMBER"
+        }
+      ]
     }
     ```
+  - `departments` (array of objects) - the user's department memberships; each item has `department`, which is one of `CLINIC`, `TECH`, `SUPPORT`, `MEDIA`, `PRESIDIUM`, and `role`, which is one of `LEADER`, `VICE`, `ADVISOR`, `MEMBER`.
 - **Error Responses**:
   - `401 UNAUTHORIZED` - not authenticated.
   - `404 NOT_FOUND` - no user with the given id exists.

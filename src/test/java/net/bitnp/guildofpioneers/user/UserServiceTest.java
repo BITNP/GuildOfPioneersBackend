@@ -1,6 +1,8 @@
 package net.bitnp.guildofpioneers.user;
 
 import net.bitnp.guildofpioneers.storage.FileStorageService;
+import net.bitnp.guildofpioneers.user.entity.Department;
+import net.bitnp.guildofpioneers.user.entity.DepartmentRole;
 import net.bitnp.guildofpioneers.user.entity.User;
 import net.bitnp.guildofpioneers.user.entity.UserDepartment;
 import net.bitnp.guildofpioneers.user.exception.PhoneAlreadyExistsException;
@@ -16,6 +18,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,19 +55,26 @@ class UserServiceTest {
                 .password("encoded-hash")
                 .build();
         when(userRepository.findByUserNameIgnoreCase("Alice")).thenReturn(Optional.of(user));
-        when(userDepartmentRepository.findById(7L)).thenReturn(
-                Optional.of(UserDepartment.builder().userId(7L).department("Technology").build())
+        when(userDepartmentRepository.findByUserId(7L)).thenReturn(
+                List.of(UserDepartment.builder()
+                        .userId(7L)
+                        .department(Department.TECH)
+                        .role(DepartmentRole.MEMBER)
+                        .build())
         );
 
         AuthResponse response = userService.getCurrentUser(authentication);
 
         assertThat(response.getId()).isEqualTo(7L);
         assertThat(response.getUserName()).isEqualTo("Alice");
-        assertThat(response.getDepartment()).isEqualTo("Technology");
+        assertThat(response.getDepartments()).extracting(UserDepartmentDto::getDepartment)
+                .containsExactly(Department.TECH);
+        assertThat(response.getDepartments()).extracting(UserDepartmentDto::getRole)
+                .containsExactly(DepartmentRole.MEMBER);
     }
 
     @Test
-    void getCurrentUser_returnsNullDepartmentWhenNotAssigned() {
+    void getCurrentUser_returnsEmptyDepartmentsWhenNotAssigned() {
         Authentication authentication = new TestingAuthenticationToken("Alice", null);
         User user = User.builder()
                 .id(7L)
@@ -73,11 +83,11 @@ class UserServiceTest {
                 .password("encoded-hash")
                 .build();
         when(userRepository.findByUserNameIgnoreCase("Alice")).thenReturn(Optional.of(user));
-        when(userDepartmentRepository.findById(7L)).thenReturn(Optional.empty());
+        when(userDepartmentRepository.findByUserId(7L)).thenReturn(List.of());
 
         AuthResponse response = userService.getCurrentUser(authentication);
 
-        assertThat(response.getDepartment()).isNull();
+        assertThat(response.getDepartments()).isEmpty();
     }
 
     @Test
@@ -90,8 +100,12 @@ class UserServiceTest {
                 .password("encoded-hash")
                 .build();
         when(userRepository.findById(7L)).thenReturn(Optional.of(user));
-        when(userDepartmentRepository.findById(7L)).thenReturn(
-                Optional.of(UserDepartment.builder().userId(7L).department("Technology").build())
+        when(userDepartmentRepository.findByUserId(7L)).thenReturn(
+                List.of(UserDepartment.builder()
+                        .userId(7L)
+                        .department(Department.TECH)
+                        .role(DepartmentRole.MEMBER)
+                        .build())
         );
         when(fileStorageService.avatarUrl(7L)).thenReturn("/uploads/avatars/7?v=1720000000000");
 
@@ -102,11 +116,14 @@ class UserServiceTest {
         assertThat(response.getPhone()).isEqualTo("13800000000");
         assertThat(response.getEmail()).isEqualTo("alice@example.com");
         assertThat(response.getAvatar()).isEqualTo("/uploads/avatars/7?v=1720000000000");
-        assertThat(response.getDepartment()).isEqualTo("Technology");
+        assertThat(response.getDepartments()).extracting(UserDepartmentDto::getDepartment)
+                .containsExactly(Department.TECH);
+        assertThat(response.getDepartments()).extracting(UserDepartmentDto::getRole)
+                .containsExactly(DepartmentRole.MEMBER);
     }
 
     @Test
-    void getUser_returnsNullDepartmentWhenNotAssigned() {
+    void getUser_returnsEmptyDepartmentsWhenNotAssigned() {
         User user = User.builder()
                 .id(7L)
                 .userName("Alice")
@@ -114,11 +131,11 @@ class UserServiceTest {
                 .password("encoded-hash")
                 .build();
         when(userRepository.findById(7L)).thenReturn(Optional.of(user));
-        when(userDepartmentRepository.findById(7L)).thenReturn(Optional.empty());
+        when(userDepartmentRepository.findByUserId(7L)).thenReturn(List.of());
 
         AuthResponse response = userService.getUser(7L);
 
-        assertThat(response.getDepartment()).isNull();
+        assertThat(response.getDepartments()).isEmpty();
     }
 
     @Test

@@ -3,7 +3,6 @@ package net.bitnp.guildofpioneers.user;
 import lombok.extern.slf4j.Slf4j;
 import net.bitnp.guildofpioneers.storage.FileStorageService;
 import net.bitnp.guildofpioneers.user.entity.User;
-import net.bitnp.guildofpioneers.user.entity.UserDepartment;
 import net.bitnp.guildofpioneers.user.exception.PhoneAlreadyExistsException;
 import net.bitnp.guildofpioneers.user.exception.UserNotFoundException;
 import net.bitnp.guildofpioneers.user.repository.UserDepartmentRepository;
@@ -12,6 +11,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 /**
  * Handles profile retrieval, profile updates, and avatar management for users.
@@ -96,11 +97,15 @@ public class UserService {
     }
 
     private AuthResponse toFullResponse(User user) {
-        String department = userDepartmentRepository.findById(user.getId())
-                .map(UserDepartment::getDepartment)
-                .orElse(null);
+        List<UserDepartmentDto> departments = userDepartmentRepository.findByUserId(user.getId())
+                .stream()
+                .map(department -> UserDepartmentDto.builder()
+                        .department(department.getDepartment())
+                        .role(department.getRole())
+                        .build())
+                .toList();
         AuthResponse response = toResponse(user);
-        response.setDepartment(department);
+        response.setDepartments(departments);
         return response;
     }
 
