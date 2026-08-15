@@ -32,17 +32,22 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.time.Instant;
 
+import static org.hamcrest.Matchers.hasItems;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -441,5 +446,188 @@ class TodoControllerIntegrationTest {
     void unauthenticatedRequest_isRejected() throws Exception {
         mockMvc.perform(get("/api/todo/projects"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void createProject_byManager_returnsCreatedProjectWithCreatorAsLeader() throws Exception {
+        User manager = createManagerUser("Manager", "13000000003");
+        MockHttpSession managerSession = login(manager);
+
+        mockMvc.perform(post("/api/todo/projects")
+                        .session(managerSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Hackathon",
+                                  "description": "Annual hackathon",
+                                  "leaderIds": [%d],
+                                  "memberIds": [%d]
+                                }
+                                """.formatted(leader.getId(), member.getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").isNumber())
+                .andExpect(jsonPath("$.title").value("Hackathon"))
+                .andExpect(jsonPath("$.description").value("Annual hackathon"))
+                .andExpect(jsonPath("$.cover").value(nullValue()))
+                .andExpect(jsonPath("$.leaderIds", hasSize(2)))
+                .andExpect(jsonPath("$.leaderIds", hasItems(
+                        leader.getId().intValue(), manager.getId().intValue())))
+                .andExpect(jsonPath("$.memberIds[0]").value(member.getId().intValue()));
+    }
+
+    @Test
+    void createProject_byNonManager_returnsForbidden() throws Exception {
+        mockMvc.perform(post("/api/todo/projects")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Hijacked",
+                                  "leaderIds": [],
+                                  "memberIds": []
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void createProject_withOverlappingLeaderAndMember_returnsBadRequest() throws Exception {
+        MockHttpSession managerSession = createManagerSession("Manager", "13000000003");
+
+        mockMvc.perform(post("/api/todo/projects")
+                        .session(managerSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Hackathon",
+                                  "leaderIds": [%d],
+                                  "memberIds": [%d]
+                                }
+                                """.formatted(leader.getId(), leader.getId())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createProject_withCreatorAsMember_returnsBadRequest() throws Exception {
+        User manager = createManagerUser("Manager", "13000000003");
+        MockHttpSession managerSession = login(manager);
+
+        mockMvc.perform(post("/api/todo/projects")
+                        .session(managerSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Hackathon",
+                                  "leaderIds": [],
+                                  "memberIds": [%d]
+                                }
+                                """.formatted(manager.getId())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createProject_withUnknownUser_returnsBadRequest() throws Exception {
+        MockHttpSession managerSession = createManagerSession("Manager", "13000000003");
+
+        mockMvc.perform(post("/api/todo/projects")
+                        .session(managerSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Hackathon",
+                                  "leaderIds": [9999],
+                                  "memberIds": []
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createProject_withBlankTitle_returnsBadRequest() throws Exception {
+        MockHttpSession managerSession = createManagerSession("Manager", "13000000003");
+
+        mockMvc.perform(post("/api/todo/projects")
+                        .session(managerSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "   ",
+                                  "leaderIds": [],
+                                  "memberIds": []
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createProject_unauthenticatedRequest_isRejected() throws Exception {
+        mockMvc.perform(post("/api/todo/projects")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Hackathon",
+                                  "leaderIds": [],
+                                  "memberIds": []
+                                }
+                                """))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void uploadProjectCover_byNonManager_returnsForbidden() throws Exception {
+        MockMultipartFile cover = new MockMultipartFile(
+                "file", "cover.png", MediaType.IMAGE_PNG_VALUE, new byte[]{1}
+        );
+
+        mockMvc.perform(multipart(HttpMethod.PUT, "/api/todo/projects/{projectId}/cover", project.getId())
+                        .file(cover)
+                        .session(session))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void uploadProjectCover_missingProject_returnsNotFound() throws Exception {
+        MockHttpSession managerSession = createManagerSession("Manager", "13000000003");
+        MockMultipartFile cover = new MockMultipartFile(
+                "file", "cover.png", MediaType.IMAGE_PNG_VALUE, new byte[]{1}
+        );
+
+        mockMvc.perform(multipart(HttpMethod.PUT, "/api/todo/projects/{projectId}/cover", 9999L)
+                        .file(cover)
+                        .session(managerSession))
+                .andExpect(status().isNotFound());
+    }
+
+    private MockHttpSession createManagerSession(String username, String phone) throws Exception {
+        return login(createManagerUser(username, phone));
+    }
+
+    private User createManagerUser(String username, String phone) {
+        User manager = userRepository.save(User.builder()
+                .userName(username)
+                .phone(phone)
+                .email(username.toLowerCase() + "@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+        userDepartmentRepository.save(UserDepartment.builder()
+                .userId(manager.getId())
+                .department(Department.TECH)
+                .role(DepartmentRole.LEADER)
+                .build());
+        return manager;
+    }
+
+    private MockHttpSession login(User loginUser) throws Exception {
+        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "%s",
+                                  "password": "%s"
+                                }
+                                """.formatted(loginUser.getUserName(), PASSWORD)))
+                .andExpect(status().isOk())
+                .andReturn();
+        return (MockHttpSession) loginResult.getRequest().getSession();
     }
 }

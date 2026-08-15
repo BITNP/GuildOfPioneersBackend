@@ -167,7 +167,25 @@ public class UserService {
                 .toList();
         AuthResponse response = toResponse(user);
         response.setDepartments(departments);
+        response.setIsManager(permissionService.isManager(user));
         return response;
+    }
+
+    /**
+     * Returns a brief summary of every user, enough for pickers and lists to render
+     * avatars and display names. Private contact fields are not included.
+     *
+     * @return the user summaries ordered by id
+     */
+    @Transactional(readOnly = true)
+    public List<UserSummaryResponse> listUserSummaries() {
+        return userRepository.findAll().stream()
+                .map(user -> UserSummaryResponse.builder()
+                        .id(user.getId())
+                        .userName(user.getUserName())
+                        .avatar(fileStorageService.avatarUrl(user.getId()))
+                        .build())
+                .toList();
     }
 
     private User findByAuthentication(Authentication authentication) {

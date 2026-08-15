@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 /**
  * Endpoints for viewing and editing user profiles. A user may edit their own
  * profile, and admins may edit any user's profile.
@@ -23,6 +25,16 @@ public class UserController {
 
     public UserController(UserService userService) {
         this.userService = userService;
+    }
+
+    /**
+     * Returns a brief summary of every user, without private contact fields.
+     *
+     * @return the user summaries
+     */
+    @GetMapping
+    public List<UserSummaryResponse> listUsers() {
+        return userService.listUserSummaries();
     }
 
     /**

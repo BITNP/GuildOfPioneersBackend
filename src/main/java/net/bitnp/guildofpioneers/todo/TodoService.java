@@ -5,8 +5,12 @@ import net.bitnp.guildofpioneers.common.PermissionService;
 import net.bitnp.guildofpioneers.storage.FileStorageService;
 import net.bitnp.guildofpioneers.todo.entity.TodoAction;
 import net.bitnp.guildofpioneers.todo.entity.TodoProject;
+import net.bitnp.guildofpioneers.todo.entity.TodoProjectLeader;
 import net.bitnp.guildofpioneers.todo.entity.TodoProjectLeaderKey;
+import net.bitnp.guildofpioneers.todo.entity.TodoProjectMember;
+import net.bitnp.guildofpioneers.todo.entity.TodoProjectMemberKey;
 import net.bitnp.guildofpioneers.todo.entity.TodoTask;
+import net.bitnp.guildofpioneers.todo.exception.InvalidProjectRequestException;
 import net.bitnp.guildofpioneers.todo.exception.NotProjectLeaderException;
 import net.bitnp.guildofpioneers.todo.exception.TodoActionNotFoundException;
 import net.bitnp.guildofpioneers.todo.exception.TodoProjectNotFoundException;
@@ -20,15 +24,20 @@ import net.bitnp.guildofpioneers.todo.repository.TodoTaskLeaderRepository;
 import net.bitnp.guildofpioneers.todo.repository.TodoTaskMemberRepository;
 import net.bitnp.guildofpioneers.todo.repository.TodoTaskRepository;
 import net.bitnp.guildofpioneers.user.entity.User;
+import net.bitnp.guildofpioneers.user.exception.PermissionDeniedException;
 import net.bitnp.guildofpioneers.user.repository.UserRepository;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -91,6 +100,99 @@ public class TodoService {
         return todoProjectRepository.findAllByOrderByUpdatedDateDesc().stream()
                 .map(this::toProjectResponse)
                 .toList();
+    }
+
+    /**
+     * Creates a project with its leaders and members. Only a manager may create
+     * projects. The creating user is always added as a leader of the project. A user
+     * may not be both a leader and a member, and every referenced user must exist.
+     *
+     * @param request        the validated project data
+     * @param authentication the current authentication
+     * @return the created project, with member ids but without resolved user summaries
+     * @throws PermissionDeniedException       if the current user is not a manager
+     * @throws InvalidProjectRequestException  if a user is both leader and member, or a referenced user does not exist
+     */
+    @Transactional
+    public TodoProjectUpdateResponse createProject(
+            CreateProjectRequest request, Authentication authentication
+    ) {
+        User user = permissionService.currentUser(authentication);
+        if (!permissionService.isManager(user)) {
+            throw new PermissionDeniedException("Only managers can create projects");
+        }
+        List<Long> memberIds = distinctIds(request.getMemberIds());
+        List<Long> leaderIds = new ArrayList<>(distinctIds(request.getLeaderIds()));
+        if (!leaderIds.contains(user.getId())) {
+            leaderIds.add(user.getId());
+        }
+        if (leaderIds.stream().anyMatch(memberIds::contains)) {
+            throw new InvalidProjectRequestException("A user cannot be both a leader and a member of the same project");
+        }
+        requireUsersExist(leaderIds, memberIds);
+
+        Instant now = Instant.now();
+        TodoProject project = todoProjectRepository.save(TodoProject.builder()
+                .title(request.getTitle())
+                .description(blankToNull(request.getDescription()))
+                .createdDate(now)
+                .updatedDate(now)
+                .build());
+        leaderIds.forEach(userId -> todoProjectLeaderRepository.save(TodoProjectLeader.builder()
+                .id(new TodoProjectLeaderKey(project.getId(), userId))
+                .build()));
+        memberIds.forEach(userId -> todoProjectMemberRepository.save(TodoProjectMember.builder()
+                .id(new TodoProjectMemberKey(project.getId(), userId))
+                .build()));
+        log.trace("Project {} created by {}", project.getId(), authentication.getName());
+        return toProjectUpdateResponse(project);
+    }
+
+    /**
+     * Stores the cover image of a project. Only a manager may set or replace a
+     * project's cover; the change bumps the project's updated date.
+     *
+     * @param projectId      the project id
+     * @param file           the uploaded cover image
+     * @param authentication the current authentication
+     * @return the updated project, with member ids but without resolved user summaries
+     * @throws TodoProjectNotFoundException if the project does not exist
+     * @throws PermissionDeniedException    if the current user is not a manager
+     */
+    @Transactional
+    public TodoProjectUpdateResponse uploadProjectCover(
+            Long projectId, MultipartFile file, Authentication authentication
+    ) {
+        findProject(projectId);
+        User user = permissionService.currentUser(authentication);
+        if (!permissionService.isManager(user)) {
+            throw new PermissionDeniedException("Only managers can set project covers");
+        }
+        fileStorageService.storeProjectCover(file, projectId);
+        touchProject(projectId);
+        log.trace("Cover of project {} updated by {}", projectId, authentication.getName());
+        return toProjectUpdateResponse(findProject(projectId));
+    }
+
+    private List<Long> distinctIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> unique = new LinkedHashSet<>(ids);
+        unique.removeIf(Objects::isNull);
+        return List.copyOf(unique);
+    }
+
+    private void requireUsersExist(List<Long> leaderIds, List<Long> memberIds) {
+        List<Long> allIds = new ArrayList<>(leaderIds);
+        allIds.addAll(memberIds);
+        if (allIds.isEmpty()) {
+            return;
+        }
+        long existing = userRepository.findAllById(allIds).size();
+        if (existing != allIds.size()) {
+            throw new InvalidProjectRequestException("One or more referenced users do not exist");
+        }
     }
 
     /**

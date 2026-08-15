@@ -6,23 +6,18 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.List;
-
 /**
- * Response body describing a user profile.
+ * Brief summary of a user, enough for the UI to render the user's avatar and
+ * display name without exposing private contact information.
  */
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AuthResponse {
+public class UserSummaryResponse {
 
     private Long id;
     private String userName;
     private String avatar;
-    private String phone;
-    private String email;
-    private List<UserDepartmentDto> departments;
-    private Boolean isManager;
 }

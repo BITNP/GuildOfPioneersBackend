@@ -68,6 +68,18 @@ public class FileStorageService {
     }
 
     /**
+     * Stores a cover image for a project and returns its public URL.
+     *
+     * @param file      the uploaded cover image
+     * @param projectId the owning project's id
+     * @return the public URL of the stored cover
+     * @throws InvalidFileTypeException if the file is empty or not a supported image type
+     */
+    public String storeProjectCover(MultipartFile file, Long projectId) {
+        return store(ObjectManagerRegistry.NAMESPACE_PROJECT_COVERS, String.valueOf(projectId), file, avatarFileTypeHandler);
+    }
+
+    /**
      * Stores a file in the given namespace under the given key.
      *
      * @param namespace the namespace to store into

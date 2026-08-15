@@ -207,4 +207,33 @@ class UserControllerIntegrationTest {
                                 """))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    void listUsers_returnsSummariesWithoutContactFields() throws Exception {
+        mockMvc.perform(get("/api/users").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[0].id").isNumber())
+                .andExpect(jsonPath("$[0].userName").exists())
+                .andExpect(jsonPath("$[0].avatar").exists())
+                .andExpect(jsonPath("$[0].phone").doesNotExist())
+                .andExpect(jsonPath("$[0].email").doesNotExist());
+    }
+
+    @Test
+    void listUsers_unauthenticatedRequest_isRejected() throws Exception {
+        mockMvc.perform(get("/api/users"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void getMe_returnsIsManagerFlag() throws Exception {
+        mockMvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isManager").value(false));
+
+        mockMvc.perform(get("/api/auth/me").session(adminSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isManager").value(true));
+    }
 }

@@ -107,7 +107,8 @@ Keep entries sorted by path, then by HTTP method.
       "avatar": "/uploads/avatars/default?v=1720000000000",
       "phone": "13800000000",
       "email": "alice@example.com",
-      "departments": []
+      "departments": [],
+      "isManager": false
     }
     ```
 - **Error Responses**:
@@ -116,7 +117,7 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `POST /api/auth/login`
 
-- **Description**: Authenticates a user by username and password. The username lookup is case-insensitive. On success, establishes a server-side session and returns a session cookie. When `rememberMe` is `true`, the session and its cookie are extended to 30 days so the user stays logged in across browser restarts; otherwise the session cookie is browser-session-scoped.
+- **Description**: Authenticates a user by username and password. The username lookup is case-insensitive. On success, establishes a server-side session and returns a session cookie. When `rememberMe` is `true`, the session and its cookie are extended to 30 days so the user stays logged in across browser restarts; otherwise the session cookie is browser-session-scoped. `isManager` is `true` when the user is a member of the `ADMIN` department or holds a `LEADER`, `VICE`, or `ADVISOR` role in any department.
 - **Authentication**: None.
 - **Request Body**: `LoginRequest`:
   - `username` (string, required) - login identifier.
@@ -139,7 +140,8 @@ Keep entries sorted by path, then by HTTP method.
           "department": "TECH",
           "role": "MEMBER"
         }
-      ]
+      ],
+      "isManager": false
     }
     ```
 - **Error Responses**:
@@ -160,7 +162,7 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `GET /api/auth/me`
 
-- **Description**: Returns the currently authenticated user.
+- **Description**: Returns the currently authenticated user. `isManager` is `true` when the user is a member of the `ADMIN` department or holds a `LEADER`, `VICE`, or `ADVISOR` role in any department.
 - **Authentication**: Authenticated session.
 - **Request Body**: -
 - **Path Parameters**: -
@@ -180,7 +182,8 @@ Keep entries sorted by path, then by HTTP method.
           "department": "CLINIC",
           "role": "MEMBER"
         }
-      ]
+      ],
+      "isManager": false
     }
     ```
   - `departments` (array of objects) - the user's department memberships; each item has `department`, which is one of `CLINIC`, `TECH`, `SUPPORT`, `MEDIA`, `PRESIDIUM`, `ADMIN`, and `role`, which is one of `LEADER`, `VICE`, `ADVISOR`, `MEMBER`.
@@ -211,7 +214,8 @@ Keep entries sorted by path, then by HTTP method.
           "department": "TECH",
           "role": "MEMBER"
         }
-      ]
+      ],
+      "isManager": false
     }
     ```
 - **Error Responses**:
@@ -242,7 +246,8 @@ Keep entries sorted by path, then by HTTP method.
           "department": "TECH",
           "role": "MEMBER"
         }
-      ]
+      ],
+      "isManager": false
     }
     ```
 - **Error Responses**:
@@ -350,6 +355,38 @@ Keep entries sorted by path, then by HTTP method.
 - **Error Responses**:
   - `401 UNAUTHORIZED` - not authenticated.
 
+### `POST /api/todo/projects`
+
+- **Description**: Creates a project with its leaders and members. Only a manager (a member of the `ADMIN` department, or holding a `LEADER`, `VICE`, or `ADVISOR` role in any department) may create projects. The creating user is always added as a leader of the project, even when not listed in `leaderIds`. A user may not appear in both the leader and member lists (including the auto-added creator), and every referenced user must exist. The project's `createdDate` and `updatedDate` are set to the current time. The response carries the project's own fields and the member user ids only; user name/avatar summaries are resolved by the `GET` endpoints.
+- **Authentication**: Authenticated session. The current user must be a manager.
+- **Request Body**: `CreateProjectRequest`:
+  - `title` (string, required) - the project title; must not be blank.
+  - `description` (string, optional) - the project description; may be `null` or empty.
+  - `leaderIds` (array of integers, optional) - the user ids to assign as leaders.
+  - `memberIds` (array of integers, optional) - the user ids to assign as members.
+- **Path Parameters**: -
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `201 CREATED`
+  - **Body**: `TodoProjectUpdateResponse` - the created project without resolved user summaries.
+    ```json
+    {
+      "id": 4,
+      "title": "Hackathon",
+      "cover": null,
+      "description": "Annual hackathon",
+      "createdDate": "2026-08-15T08:00:00.000Z",
+      "updatedDate": "2026-08-15T08:00:00.000Z",
+      "endDate": null,
+      "leaderIds": [1],
+      "memberIds": [2, 3]
+    }
+    ```
+- **Error Responses**:
+  - `400 BAD_REQUEST` - `title` missing or blank, a user appears in both `leaderIds` and `memberIds`, or a referenced user does not exist.
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `403 FORBIDDEN` - the current user is not a manager.
+
 ### `GET /api/todo/projects/{projectId}`
 
 - **Description**: Returns a single project with its leaders, members, and cover image. `cover` is `null` when the project has no stored cover.
@@ -425,6 +462,37 @@ Keep entries sorted by path, then by HTTP method.
   - `401 UNAUTHORIZED` - not authenticated.
   - `403 FORBIDDEN` - the current user is not a leader of the project.
   - `404 NOT_FOUND` - the project does not exist.
+
+### `PUT /api/todo/projects/{projectId}/cover`
+
+- **Description**: Stores (or replaces) the cover image of a project. The image is stored through the Veil storage layer, keyed by the project's id in the `project_covers` namespace, and the `cover` field of the response is the public path `/uploads/project_covers/{projectId}` with a `?v=` cache-busting version. The change bumps the project's `updatedDate`. Only a manager (a member of the `ADMIN` department, or holding a `LEADER`, `VICE`, or `ADVISOR` role in any department) may set a project's cover.
+- **Authentication**: Authenticated session. The current user must be a manager.
+- **Request Body**: multipart form-data:
+  - `file` (binary, required) - cover image. Allowed types: `image/jpeg`, `image/png`, `image/webp`, `image/gif`. Max size 5MB.
+- **Path Parameters**: `projectId` (integer) - the project's id.
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**: `TodoProjectUpdateResponse` - the updated project without resolved user summaries.
+    ```json
+    {
+      "id": 1,
+      "title": "Autumn Camp",
+      "cover": "/uploads/project_covers/1?v=1720000000000",
+      "description": "Annual autumn camp",
+      "createdDate": "2026-08-13T08:00:00.000Z",
+      "updatedDate": "2026-08-15T09:00:00.000Z",
+      "endDate": null,
+      "leaderIds": [1],
+      "memberIds": [2, 3]
+    }
+    ```
+- **Error Responses**:
+  - `400 BAD_REQUEST` - `file` part missing, empty, or unsupported image type.
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `403 FORBIDDEN` - the current user is not a manager.
+  - `404 NOT_FOUND` - the project does not exist.
+  - `413 CONTENT_TOO_LARGE` - file exceeds the maximum allowed size.
 
 ### `GET /api/todo/tasks?projectId={projectId}`
 
@@ -509,6 +577,33 @@ Keep entries sorted by path, then by HTTP method.
   - `401 UNAUTHORIZED` - not authenticated.
   - `404 NOT_FOUND` - the task does not exist.
 
+### `GET /api/users`
+
+- **Description**: Returns a brief summary of every user (id, userName, avatar), ordered by id. Private contact fields are not included. Intended for user pickers, such as assigning leaders and members to a new project.
+- **Authentication**: Authenticated session.
+- **Request Body**: -
+- **Path Parameters**: -
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**:
+    ```json
+    [
+      {
+        "id": 1,
+        "userName": "Alice",
+        "avatar": "/uploads/avatars/1?v=1720000000000"
+      },
+      {
+        "id": 2,
+        "userName": "Bob",
+        "avatar": "/uploads/avatars/default?v=1720000000000"
+      }
+    ]
+    ```
+- **Error Responses**:
+  - `401 UNAUTHORIZED` - not authenticated.
+
 ### `GET /api/users/{id}`
 
 - **Description**: Returns the profile of a user by id. No privacy filtering is applied yet, so the full profile (including phone and email) is returned.
@@ -531,7 +626,8 @@ Keep entries sorted by path, then by HTTP method.
           "department": "CLINIC",
           "role": "MEMBER"
         }
-      ]
+      ],
+      "isManager": false
     }
     ```
   - `departments` (array of objects) - the user's department memberships; each item has `department`, which is one of `CLINIC`, `TECH`, `SUPPORT`, `MEDIA`, `PRESIDIUM`, `ADMIN`, and `role`, which is one of `LEADER`, `VICE`, `ADVISOR`, `MEMBER`.
@@ -563,7 +659,8 @@ Keep entries sorted by path, then by HTTP method.
           "department": "TECH",
           "role": "MEMBER"
         }
-      ]
+      ],
+      "isManager": false
     }
     ```
 - **Error Responses**:

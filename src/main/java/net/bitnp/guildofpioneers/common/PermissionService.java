@@ -1,6 +1,7 @@
 package net.bitnp.guildofpioneers.common;
 
 import net.bitnp.guildofpioneers.user.entity.Department;
+import net.bitnp.guildofpioneers.user.entity.DepartmentRole;
 import net.bitnp.guildofpioneers.user.entity.User;
 import net.bitnp.guildofpioneers.user.exception.UserNotFoundException;
 import net.bitnp.guildofpioneers.user.repository.UserDepartmentRepository;
@@ -64,6 +65,24 @@ public class PermissionService {
      */
     public boolean isAdmin(User user) {
         return isInDepartment(user, Department.ADMIN);
+    }
+
+    /**
+     * Returns whether the user counts as a manager: a member of the ADMIN
+     * department, or holding a LEADER, VICE, or ADVISOR role in any department.
+     * Managers may create projects and manage their covers.
+     *
+     * @param user the user to check
+     * @return true if the user is a manager
+     */
+    public boolean isManager(User user) {
+        if (isInDepartment(user, Department.ADMIN)) {
+            return true;
+        }
+        return userDepartmentRepository.findByUserId(user.getId()).stream()
+                .anyMatch(membership -> membership.getRole() == DepartmentRole.LEADER
+                        || membership.getRole() == DepartmentRole.VICE
+                        || membership.getRole() == DepartmentRole.ADVISOR);
     }
 
     /**
