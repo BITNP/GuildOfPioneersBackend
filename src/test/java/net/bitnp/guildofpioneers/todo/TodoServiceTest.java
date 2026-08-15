@@ -40,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -236,7 +237,7 @@ class TodoServiceTest {
     }
 
     @Test
-    void uploadProjectCover_byManager_storesCoverAndBumpsUpdatedDate() {
+    void updateProject_replacesLeadersAndMembers() {
         TodoProject project = TodoProject.builder()
                 .id(1L)
                 .title("Autumn Camp")
@@ -245,7 +246,122 @@ class TodoServiceTest {
                 .build();
         when(todoProjectRepository.findById(1L)).thenReturn(Optional.of(project));
         when(permissionService.currentUser(authentication)).thenReturn(user);
-        when(permissionService.isManager(user)).thenReturn(true);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
+        when(userRepository.findAllById(anyList())).thenReturn(List.of(user, user));
+        List<TodoProjectLeader> oldLeaders = List.of(
+                TodoProjectLeader.builder().id(new TodoProjectLeaderKey(1L, 1L)).build());
+        List<TodoProjectLeader> newLeaders = List.of(
+                TodoProjectLeader.builder().id(new TodoProjectLeaderKey(1L, 2L)).build());
+        List<TodoProjectMember> oldMembers = List.of(
+                TodoProjectMember.builder().id(new TodoProjectMemberKey(1L, 2L)).build());
+        List<TodoProjectMember> newMembers = List.of(
+                TodoProjectMember.builder().id(new TodoProjectMemberKey(1L, 3L)).build());
+        when(todoProjectLeaderRepository.findById_ProjectId(1L)).thenReturn(oldLeaders, newLeaders);
+        when(todoProjectMemberRepository.findById_ProjectId(1L)).thenReturn(oldMembers, newMembers);
+        when(todoProjectRepository.save(any())).thenReturn(project);
+
+        UpdateProjectRequest request = UpdateProjectRequest.builder()
+                .title("Autumn Camp 2026")
+                .description("Annual autumn camp")
+                .leaderIds(List.of(2L))
+                .memberIds(List.of(3L))
+                .build();
+
+        TodoProjectUpdateResponse response = todoService.updateProject(1L, request, authentication);
+
+        assertThat(response.getLeaderIds()).containsExactly(2L);
+        assertThat(response.getMemberIds()).containsExactly(3L);
+        verify(todoProjectLeaderRepository).deleteAll(oldLeaders);
+        verify(todoProjectMemberRepository).deleteAll(oldMembers);
+        verify(todoProjectLeaderRepository).save(argThat(leader -> leader.getId().getUserId() == 2L));
+        verify(todoProjectMemberRepository).save(argThat(member -> member.getId().getUserId() == 3L));
+        verify(todoProjectRepository).save(project);
+    }
+
+    @Test
+    void updateProject_absentLists_leaveMembershipUnchanged() {
+        TodoProject project = TodoProject.builder()
+                .id(1L)
+                .title("Autumn Camp")
+                .createdDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .updatedDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .build();
+        when(todoProjectRepository.findById(1L)).thenReturn(Optional.of(project));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
+        when(todoProjectRepository.save(any())).thenReturn(project);
+
+        UpdateProjectRequest request = UpdateProjectRequest.builder()
+                .title("Autumn Camp 2026")
+                .description("Annual autumn camp")
+                .build();
+
+        todoService.updateProject(1L, request, authentication);
+
+        verify(todoProjectLeaderRepository, never()).deleteAll(any());
+        verify(todoProjectMemberRepository, never()).deleteAll(any());
+        verify(todoProjectLeaderRepository, never()).save(any());
+        verify(todoProjectMemberRepository, never()).save(any());
+        verify(todoProjectRepository).save(project);
+    }
+
+    @Test
+    void updateProject_overlappingLeaderAndMember_throwsInvalidRequest() {
+        TodoProject project = TodoProject.builder()
+                .id(1L)
+                .title("Autumn Camp")
+                .createdDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .updatedDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .build();
+        when(todoProjectRepository.findById(1L)).thenReturn(Optional.of(project));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
+
+        UpdateProjectRequest request = UpdateProjectRequest.builder()
+                .title("Autumn Camp 2026")
+                .leaderIds(List.of(1L, 2L))
+                .memberIds(List.of(2L))
+                .build();
+
+        assertThatThrownBy(() -> todoService.updateProject(1L, request, authentication))
+                .isInstanceOf(InvalidProjectRequestException.class);
+        verify(todoProjectRepository, never()).save(any());
+    }
+
+    @Test
+    void updateProject_unknownUser_throwsInvalidRequest() {
+        TodoProject project = TodoProject.builder()
+                .id(1L)
+                .title("Autumn Camp")
+                .createdDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .updatedDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .build();
+        when(todoProjectRepository.findById(1L)).thenReturn(Optional.of(project));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
+        when(userRepository.findAllById(anyList())).thenReturn(List.of());
+
+        UpdateProjectRequest request = UpdateProjectRequest.builder()
+                .title("Autumn Camp 2026")
+                .leaderIds(List.of(99L))
+                .build();
+
+        assertThatThrownBy(() -> todoService.updateProject(1L, request, authentication))
+                .isInstanceOf(InvalidProjectRequestException.class);
+        verify(todoProjectRepository, never()).save(any());
+    }
+
+    @Test
+    void uploadProjectCover_byLeader_storesCoverAndBumpsUpdatedDate() {
+        TodoProject project = TodoProject.builder()
+                .id(1L)
+                .title("Autumn Camp")
+                .createdDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .updatedDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .build();
+        when(todoProjectRepository.findById(1L)).thenReturn(Optional.of(project));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
         when(fileStorageService.storeProjectCover(any(), any())).thenReturn("/uploads/project_covers/1?v=1720000000000");
         when(fileStorageService.projectCoverUrl(1L)).thenReturn("/uploads/project_covers/1?v=1720000000000");
 
@@ -262,7 +378,7 @@ class TodoServiceTest {
     }
 
     @Test
-    void uploadProjectCover_byNonManager_throwsPermissionDenied() {
+    void uploadProjectCover_byNonLeader_throwsPermissionDenied() {
         TodoProject project = TodoProject.builder()
                 .id(1L)
                 .title("Autumn Camp")
@@ -271,7 +387,7 @@ class TodoServiceTest {
                 .build();
         when(todoProjectRepository.findById(1L)).thenReturn(Optional.of(project));
         when(permissionService.currentUser(authentication)).thenReturn(user);
-        when(permissionService.isManager(user)).thenReturn(false);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(false);
 
         MockMultipartFile file = new MockMultipartFile(
                 "file", "cover.png", "image/png", new byte[]{1}

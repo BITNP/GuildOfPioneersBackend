@@ -434,11 +434,13 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `PUT /api/todo/projects/{projectId}`
 
-- **Description**: Updates a project's title and description. The project's leaders may edit it, and so may any user in the `ADMIN` department (who may edit any project). The project's `updatedDate` is bumped to the current time. The response carries the project's own fields and the member user ids only; user name/avatar summaries are resolved by the `GET` endpoints.
+- **Description**: Updates a project's title and description, optionally replacing its leaders and members. The project's leaders may edit it, and so may any user in the `ADMIN` department (who may edit any project). When `leaderIds` or `memberIds` is provided, the corresponding membership list is replaced entirely; when absent it is left unchanged. A user may not appear in both lists, and every referenced user must exist. The project's `updatedDate` is bumped to the current time. The response carries the project's own fields and the member user ids only; user name/avatar summaries are resolved by the `GET` endpoints.
 - **Authentication**: Authenticated session. The current user must be a leader of the project, or a member of the `ADMIN` department.
 - **Request Body**: `UpdateProjectRequest`:
   - `title` (string, required) - the project title; must not be blank.
   - `description` (string, optional) - the project description; may be `null` or empty to clear it.
+  - `leaderIds` (array of integers, optional) - the user ids to assign as leaders; replaces the current leader list when provided.
+  - `memberIds` (array of integers, optional) - the user ids to assign as members; replaces the current member list when provided.
 - **Path Parameters**: `projectId` (integer) - the project's id.
 - **Query Parameters**: -
 - **Success Response**:
@@ -458,15 +460,15 @@ Keep entries sorted by path, then by HTTP method.
     }
     ```
 - **Error Responses**:
-  - `400 BAD_REQUEST` - `title` missing or blank.
+  - `400 BAD_REQUEST` - `title` missing or blank, a user appears in both `leaderIds` and `memberIds`, or a referenced user does not exist.
   - `401 UNAUTHORIZED` - not authenticated.
   - `403 FORBIDDEN` - the current user is not a leader of the project.
   - `404 NOT_FOUND` - the project does not exist.
 
 ### `PUT /api/todo/projects/{projectId}/cover`
 
-- **Description**: Stores (or replaces) the cover image of a project. The image is stored through the Veil storage layer, keyed by the project's id in the `project_covers` namespace, and the `cover` field of the response is the public path `/uploads/project_covers/{projectId}` with a `?v=` cache-busting version. The change bumps the project's `updatedDate`. Only a manager (a member of the `ADMIN` department, or holding a `LEADER`, `VICE`, or `ADVISOR` role in any department) may set a project's cover.
-- **Authentication**: Authenticated session. The current user must be a manager.
+- **Description**: Stores (or replaces) the cover image of a project. The image is stored through the Veil storage layer, keyed by the project's id in the `project_covers` namespace, and the `cover` field of the response is the public path `/uploads/project_covers/{projectId}` with a `?v=` cache-busting version. The change bumps the project's `updatedDate`. A leader of the project may set its cover, as may any user in the `ADMIN` department.
+- **Authentication**: Authenticated session. The current user must be a leader of the project, or a member of the `ADMIN` department.
 - **Request Body**: multipart form-data:
   - `file` (binary, required) - cover image. Allowed types: `image/jpeg`, `image/png`, `image/webp`, `image/gif`. Max size 5MB.
 - **Path Parameters**: `projectId` (integer) - the project's id.
@@ -490,7 +492,7 @@ Keep entries sorted by path, then by HTTP method.
 - **Error Responses**:
   - `400 BAD_REQUEST` - `file` part missing, empty, or unsupported image type.
   - `401 UNAUTHORIZED` - not authenticated.
-  - `403 FORBIDDEN` - the current user is not a manager.
+  - `403 FORBIDDEN` - the current user is not a leader of the project.
   - `404 NOT_FOUND` - the project does not exist.
   - `413 CONTENT_TOO_LARGE` - file exceeds the maximum allowed size.
 

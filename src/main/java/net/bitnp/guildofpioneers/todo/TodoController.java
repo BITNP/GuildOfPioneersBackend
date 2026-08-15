@@ -20,7 +20,7 @@ import java.util.List;
  * Endpoints for the todo hierarchy: projects, tasks, and actions.
  * Projects are readable by any authenticated user and editable by their leaders;
  * members of the ADMIN department may edit any project. Projects may be created
- * and given covers by managers.
+ * by managers and given covers by their leaders or admins.
  */
 @RestController
 @RequestMapping("/api/todo")
@@ -58,7 +58,8 @@ public class TodoController {
     }
 
     /**
-     * Stores the cover image of a project. Only managers may set a project's cover.
+     * Stores the cover image of a project. A project leader or admin may set a
+     * project's cover.
      *
      * @param projectId      the project id
      * @param file           the uploaded cover image
@@ -85,11 +86,12 @@ public class TodoController {
     }
 
     /**
-     * Updates a project's title and description. Project leaders are allowed,
-     * as is any user in the ADMIN department.
+     * Updates a project's title and description, optionally replacing its leaders
+     * and members. Project leaders are allowed, as is any user in the ADMIN
+     * department.
      *
      * @param projectId      the project id
-     * @param request        the validated title and description
+     * @param request        the validated title, description, and membership lists
      * @param authentication the current authentication
      * @return the updated project, without resolved user summaries
      */

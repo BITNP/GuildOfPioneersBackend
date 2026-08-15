@@ -149,15 +149,15 @@ public class TodoService {
     }
 
     /**
-     * Stores the cover image of a project. Only a manager may set or replace a
-     * project's cover; the change bumps the project's updated date.
+     * Stores the cover image of a project. A leader of the project may set or
+     * replace its cover, as may any admin; the change bumps the project's updated date.
      *
      * @param projectId      the project id
      * @param file           the uploaded cover image
      * @param authentication the current authentication
      * @return the updated project, with member ids but without resolved user summaries
      * @throws TodoProjectNotFoundException if the project does not exist
-     * @throws PermissionDeniedException    if the current user is not a manager
+     * @throws PermissionDeniedException    if the current user is neither a project leader nor an admin
      */
     @Transactional
     public TodoProjectUpdateResponse uploadProjectCover(
@@ -165,8 +165,8 @@ public class TodoService {
     ) {
         findProject(projectId);
         User user = permissionService.currentUser(authentication);
-        if (!permissionService.isManager(user)) {
-            throw new PermissionDeniedException("Only managers can set project covers");
+        if (!permissionService.isAdminOr(user, () -> isProjectLeader(projectId, user))) {
+            throw new PermissionDeniedException("Only a project leader or admin can set project covers");
         }
         fileStorageService.storeProjectCover(file, projectId);
         touchProject(projectId);
@@ -277,16 +277,20 @@ public class TodoService {
     }
 
     /**
-     * Updates a project's title and description. Only a leader of the project
-     * may edit it, unless the current user is an admin, in which case any
-     * project may be edited; the change bumps the project's updated date.
+     * Updates a project's title and description, optionally replacing its leaders
+     * and members. Only a leader of the project may edit it, unless the current
+     * user is an admin, in which case any project may be edited; the change bumps
+     * the project's updated date. When {@code leaderIds} or {@code memberIds} is
+     * provided, the corresponding membership list is replaced entirely; when
+     * absent it is left unchanged.
      *
      * @param projectId      the project id
-     * @param request        the validated title and description
+     * @param request        the validated title, description, and membership lists
      * @param authentication the current authentication
      * @return the updated project, with member ids but without resolved user summaries
-     * @throws TodoProjectNotFoundException if the project does not exist
-     * @throws NotProjectLeaderException    if the current user is not a project leader
+     * @throws TodoProjectNotFoundException    if the project does not exist
+     * @throws NotProjectLeaderException       if the current user is not a project leader
+     * @throws InvalidProjectRequestException  if a user is both leader and member, or a referenced user does not exist
      */
     @Transactional
     public TodoProjectUpdateResponse updateProject(
@@ -297,11 +301,35 @@ public class TodoService {
         if (!permissionService.isAdminOr(user, () -> isProjectLeader(projectId, user))) {
             throw new NotProjectLeaderException(projectId);
         }
+        if (request.getLeaderIds() != null || request.getMemberIds() != null) {
+            List<Long> leaderIds = request.getLeaderIds() != null
+                    ? distinctIds(request.getLeaderIds())
+                    : projectLeaderIds(projectId);
+            List<Long> memberIds = request.getMemberIds() != null
+                    ? distinctIds(request.getMemberIds())
+                    : projectMemberIds(projectId);
+            if (leaderIds.stream().anyMatch(memberIds::contains)) {
+                throw new InvalidProjectRequestException("A user cannot be both a leader and a member of the same project");
+            }
+            requireUsersExist(leaderIds, memberIds);
+            replaceProjectMembers(projectId, leaderIds, memberIds);
+        }
         project.setTitle(request.getTitle());
         project.setDescription(blankToNull(request.getDescription()));
         project.setUpdatedDate(Instant.now());
         log.trace("Project {} updated", projectId);
         return toProjectUpdateResponse(todoProjectRepository.save(project));
+    }
+
+    private void replaceProjectMembers(Long projectId, List<Long> leaderIds, List<Long> memberIds) {
+        todoProjectLeaderRepository.deleteAll(todoProjectLeaderRepository.findById_ProjectId(projectId));
+        todoProjectMemberRepository.deleteAll(todoProjectMemberRepository.findById_ProjectId(projectId));
+        leaderIds.forEach(userId -> todoProjectLeaderRepository.save(TodoProjectLeader.builder()
+                .id(new TodoProjectLeaderKey(projectId, userId))
+                .build()));
+        memberIds.forEach(userId -> todoProjectMemberRepository.save(TodoProjectMember.builder()
+                .id(new TodoProjectMemberKey(projectId, userId))
+                .build()));
     }
 
     private boolean isProjectLeader(Long projectId, User user) {

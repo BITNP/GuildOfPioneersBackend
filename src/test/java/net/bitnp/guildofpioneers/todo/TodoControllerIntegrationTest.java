@@ -333,6 +333,71 @@ class TodoControllerIntegrationTest {
     }
 
     @Test
+    void leaderUpdatesProject_replacesLeadersAndMembers() throws Exception {
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Autumn Camp 2026",
+                                  "description": "Annual autumn camp",
+                                  "leaderIds": [%d],
+                                  "memberIds": []
+                                }
+                                """.formatted(member.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Autumn Camp 2026"))
+                .andExpect(jsonPath("$.leaderIds[0]").value(member.getId().intValue()))
+                .andExpect(jsonPath("$.memberIds").isEmpty());
+    }
+
+    @Test
+    void updateProject_absentLists_leaveMembershipUnchanged() throws Exception {
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Autumn Camp 2026",
+                                  "description": "Annual autumn camp"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.leaderIds[0]").value(leader.getId().intValue()))
+                .andExpect(jsonPath("$.memberIds[0]").value(member.getId().intValue()));
+    }
+
+    @Test
+    void updateProject_withOverlappingLists_returnsBadRequest() throws Exception {
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Autumn Camp 2026",
+                                  "leaderIds": [%d],
+                                  "memberIds": [%d]
+                                }
+                                """.formatted(leader.getId(), leader.getId())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateProject_withUnknownUser_returnsBadRequest() throws Exception {
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Autumn Camp 2026",
+                                  "leaderIds": [9999],
+                                  "memberIds": []
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void updateProject_withBlankTitle_returnsBadRequest() throws Exception {
         mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
                         .session(session)
@@ -574,14 +639,25 @@ class TodoControllerIntegrationTest {
     }
 
     @Test
-    void uploadProjectCover_byNonManager_returnsForbidden() throws Exception {
+    void uploadProjectCover_byNonLeader_returnsForbidden() throws Exception {
+        MvcResult memberLogin = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "Bob",
+                                  "password": "%s"
+                                }
+                                """.formatted(PASSWORD)))
+                .andExpect(status().isOk())
+                .andReturn();
+        MockHttpSession memberSession = (MockHttpSession) memberLogin.getRequest().getSession();
         MockMultipartFile cover = new MockMultipartFile(
                 "file", "cover.png", MediaType.IMAGE_PNG_VALUE, new byte[]{1}
         );
 
         mockMvc.perform(multipart(HttpMethod.PUT, "/api/todo/projects/{projectId}/cover", project.getId())
                         .file(cover)
-                        .session(session))
+                        .session(memberSession))
                 .andExpect(status().isForbidden());
     }
 
