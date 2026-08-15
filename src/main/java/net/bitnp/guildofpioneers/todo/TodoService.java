@@ -10,7 +10,12 @@ import net.bitnp.guildofpioneers.todo.entity.TodoProjectLeaderKey;
 import net.bitnp.guildofpioneers.todo.entity.TodoProjectMember;
 import net.bitnp.guildofpioneers.todo.entity.TodoProjectMemberKey;
 import net.bitnp.guildofpioneers.todo.entity.TodoTask;
+import net.bitnp.guildofpioneers.todo.entity.TodoTaskLeader;
+import net.bitnp.guildofpioneers.todo.entity.TodoTaskLeaderKey;
+import net.bitnp.guildofpioneers.todo.entity.TodoTaskMember;
+import net.bitnp.guildofpioneers.todo.entity.TodoTaskMemberKey;
 import net.bitnp.guildofpioneers.todo.exception.InvalidProjectRequestException;
+import net.bitnp.guildofpioneers.todo.exception.InvalidTaskRequestException;
 import net.bitnp.guildofpioneers.todo.exception.NotProjectLeaderException;
 import net.bitnp.guildofpioneers.todo.exception.TodoActionNotFoundException;
 import net.bitnp.guildofpioneers.todo.exception.TodoProjectNotFoundException;
@@ -195,6 +200,18 @@ public class TodoService {
         }
     }
 
+    private void requireTaskUsersExist(List<Long> leaderIds, List<Long> memberIds) {
+        List<Long> allIds = new ArrayList<>(leaderIds);
+        allIds.addAll(memberIds);
+        if (allIds.isEmpty()) {
+            return;
+        }
+        long existing = userRepository.findAllById(allIds).size();
+        if (existing != allIds.size()) {
+            throw new InvalidTaskRequestException("One or more referenced users do not exist");
+        }
+    }
+
     /**
      * Returns a single project with its leaders and members.
      *
@@ -232,6 +249,105 @@ public class TodoService {
     @Transactional(readOnly = true)
     public TodoTaskResponse getTask(Long taskId) {
         return toTaskResponse(findTask(taskId));
+    }
+
+    /**
+     * Creates a task under a project with its leaders and members. Any member of
+     * the owning project (leader or member) may create a task, as may any admin.
+     * The creating user is always added as a leader of the task. A user may not
+     * be both a leader and a member, and every referenced user must exist.
+     *
+     * @param request        the validated task data
+     * @param authentication the current authentication
+     * @return the created task, with member ids but without resolved user summaries
+     * @throws TodoProjectNotFoundException if the owning project does not exist
+     * @throws PermissionDeniedException    if the current user is not a project member and not an admin
+     * @throws InvalidTaskRequestException  if a user is both leader and member, or a referenced user does not exist
+     */
+    @Transactional
+    public TodoTaskUpdateResponse createTask(
+            CreateTaskRequest request, Authentication authentication
+    ) {
+        Long projectId = request.getProjectId();
+        findProject(projectId);
+        User user = permissionService.currentUser(authentication);
+        if (!permissionService.isAdminOr(user, () -> isProjectMemberOrLeader(projectId, user))) {
+            throw new PermissionDeniedException("Only members of the project can create tasks");
+        }
+        List<Long> memberIds = distinctIds(request.getMemberIds());
+        List<Long> leaderIds = new ArrayList<>(distinctIds(request.getLeaderIds()));
+        if (!leaderIds.contains(user.getId())) {
+            leaderIds.add(user.getId());
+        }
+        if (leaderIds.stream().anyMatch(memberIds::contains)) {
+            throw new InvalidTaskRequestException("A user cannot be both a leader and a member of the same task");
+        }
+        requireTaskUsersExist(leaderIds, memberIds);
+
+        Instant now = Instant.now();
+        TodoTask task = todoTaskRepository.save(TodoTask.builder()
+                .projectId(projectId)
+                .title(request.getTitle())
+                .description(blankToNull(request.getDescription()))
+                .createdDate(now)
+                .updatedDate(now)
+                .build());
+        leaderIds.forEach(userId -> todoTaskLeaderRepository.save(TodoTaskLeader.builder()
+                .id(new TodoTaskLeaderKey(task.getId(), userId))
+                .build()));
+        memberIds.forEach(userId -> todoTaskMemberRepository.save(TodoTaskMember.builder()
+                .id(new TodoTaskMemberKey(task.getId(), userId))
+                .build()));
+        touchProject(projectId);
+        log.trace("Task {} created by {}", task.getId(), authentication.getName());
+        return toTaskUpdateResponse(task);
+    }
+
+    /**
+     * Updates a task's title and description, optionally replacing its leaders
+     * and members. Only a leader of the task may edit it, unless the current user
+     * is an admin, in which case any task may be edited; the change bumps the
+     * task's updated date and propagates up to the owning project. When
+     * {@code leaderIds} or {@code memberIds} is provided, the corresponding
+     * membership list is replaced entirely; when absent it is left unchanged.
+     *
+     * @param taskId         the task id
+     * @param request        the validated title, description, and membership lists
+     * @param authentication the current authentication
+     * @return the updated task, with member ids but without resolved user summaries
+     * @throws TodoTaskNotFoundException if the task does not exist
+     * @throws PermissionDeniedException  if the current user is neither a task leader nor an admin
+     * @throws InvalidTaskRequestException if a user is both leader and member, or a referenced user does not exist
+     */
+    @Transactional
+    public TodoTaskUpdateResponse updateTask(
+            Long taskId, UpdateTaskRequest request, Authentication authentication
+    ) {
+        TodoTask task = findTask(taskId);
+        User user = permissionService.currentUser(authentication);
+        if (!permissionService.isAdminOr(user, () -> isTaskLeader(taskId, user))) {
+            throw new PermissionDeniedException("Only a leader of the task can edit it");
+        }
+        if (request.getLeaderIds() != null || request.getMemberIds() != null) {
+            List<Long> leaderIds = request.getLeaderIds() != null
+                    ? distinctIds(request.getLeaderIds())
+                    : taskLeaderIds(taskId);
+            List<Long> memberIds = request.getMemberIds() != null
+                    ? distinctIds(request.getMemberIds())
+                    : taskMemberIds(taskId);
+            if (leaderIds.stream().anyMatch(memberIds::contains)) {
+                throw new InvalidTaskRequestException("A user cannot be both a leader and a member of the same task");
+            }
+            requireTaskUsersExist(leaderIds, memberIds);
+            replaceTaskMembers(taskId, leaderIds, memberIds);
+        }
+        task.setTitle(request.getTitle());
+        task.setDescription(blankToNull(request.getDescription()));
+        task.setUpdatedDate(Instant.now());
+        todoTaskRepository.save(task);
+        touchProject(task.getProjectId());
+        log.trace("Task {} updated", taskId);
+        return toTaskUpdateResponse(task);
     }
 
     /**
@@ -332,8 +448,28 @@ public class TodoService {
                 .build()));
     }
 
+    private void replaceTaskMembers(Long taskId, List<Long> leaderIds, List<Long> memberIds) {
+        todoTaskLeaderRepository.deleteAll(todoTaskLeaderRepository.findById_TaskId(taskId));
+        todoTaskMemberRepository.deleteAll(todoTaskMemberRepository.findById_TaskId(taskId));
+        leaderIds.forEach(userId -> todoTaskLeaderRepository.save(TodoTaskLeader.builder()
+                .id(new TodoTaskLeaderKey(taskId, userId))
+                .build()));
+        memberIds.forEach(userId -> todoTaskMemberRepository.save(TodoTaskMember.builder()
+                .id(new TodoTaskMemberKey(taskId, userId))
+                .build()));
+    }
+
     private boolean isProjectLeader(Long projectId, User user) {
         return todoProjectLeaderRepository.existsById(new TodoProjectLeaderKey(projectId, user.getId()));
+    }
+
+    private boolean isProjectMemberOrLeader(Long projectId, User user) {
+        return todoProjectLeaderRepository.existsById(new TodoProjectLeaderKey(projectId, user.getId()))
+                || todoProjectMemberRepository.existsById(new TodoProjectMemberKey(projectId, user.getId()));
+    }
+
+    private boolean isTaskLeader(Long taskId, User user) {
+        return todoTaskLeaderRepository.existsById(new TodoTaskLeaderKey(taskId, user.getId()));
     }
 
     private String blankToNull(String value) {
@@ -431,6 +567,20 @@ public class TodoService {
                 .memberIds(memberIds)
                 .leaders(userSummaries(leaderIds))
                 .members(userSummaries(memberIds))
+                .build();
+    }
+
+    private TodoTaskUpdateResponse toTaskUpdateResponse(TodoTask task) {
+        return TodoTaskUpdateResponse.builder()
+                .id(task.getId())
+                .projectId(task.getProjectId())
+                .title(task.getTitle())
+                .description(task.getDescription())
+                .createdDate(task.getCreatedDate())
+                .updatedDate(task.getUpdatedDate())
+                .endDate(task.getEndDate())
+                .leaderIds(taskLeaderIds(task.getId()))
+                .memberIds(taskMemberIds(task.getId()))
                 .build();
     }
 

@@ -674,6 +674,235 @@ class TodoControllerIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void createTask_byProjectMember_returnsCreatedTaskWithCreatorAsLeader() throws Exception {
+        MvcResult memberLogin = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "Bob",
+                                  "password": "%s"
+                                }
+                                """.formatted(PASSWORD)))
+                .andExpect(status().isOk())
+                .andReturn();
+        MockHttpSession memberSession = (MockHttpSession) memberLogin.getRequest().getSession();
+
+        mockMvc.perform(post("/api/todo/tasks")
+                        .session(memberSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "projectId": %d,
+                                  "title": "Book venue",
+                                  "description": "Reserve the hall",
+                                  "leaderIds": [],
+                                  "memberIds": [%d]
+                                }
+                                """.formatted(project.getId(), leader.getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").isNumber())
+                .andExpect(jsonPath("$.projectId").value(project.getId().intValue()))
+                .andExpect(jsonPath("$.title").value("Book venue"))
+                .andExpect(jsonPath("$.description").value("Reserve the hall"))
+                .andExpect(jsonPath("$.endDate").value(nullValue()))
+                .andExpect(jsonPath("$.leaderIds", hasSize(1)))
+                .andExpect(jsonPath("$.leaderIds[0]").value(member.getId().intValue()))
+                .andExpect(jsonPath("$.memberIds[0]").value(leader.getId().intValue()));
+    }
+
+    @Test
+    void createTask_byNonMember_returnsForbidden() throws Exception {
+        User outsider = userRepository.save(User.builder()
+                .userName("Carol")
+                .phone("13000000004")
+                .email("carol@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+        MvcResult outsiderLogin = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "Carol",
+                                  "password": "%s"
+                                }
+                                """.formatted(PASSWORD)))
+                .andExpect(status().isOk())
+                .andReturn();
+        MockHttpSession outsiderSession = (MockHttpSession) outsiderLogin.getRequest().getSession();
+
+        mockMvc.perform(post("/api/todo/tasks")
+                        .session(outsiderSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "projectId": %d,
+                                  "title": "Hijacked",
+                                  "leaderIds": [],
+                                  "memberIds": []
+                                }
+                                """.formatted(project.getId())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void createTask_missingProject_returnsNotFound() throws Exception {
+        mockMvc.perform(post("/api/todo/tasks")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "projectId": 9999,
+                                  "title": "Prepare supplies",
+                                  "leaderIds": [],
+                                  "memberIds": []
+                                }
+                                """))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void createTask_withBlankTitle_returnsBadRequest() throws Exception {
+        mockMvc.perform(post("/api/todo/tasks")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "projectId": %d,
+                                  "title": "   ",
+                                  "leaderIds": [],
+                                  "memberIds": []
+                                }
+                                """.formatted(project.getId())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createTask_withOverlappingLeaderAndMember_returnsBadRequest() throws Exception {
+        mockMvc.perform(post("/api/todo/tasks")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "projectId": %d,
+                                  "title": "Prepare supplies",
+                                  "leaderIds": [%d],
+                                  "memberIds": [%d]
+                                }
+                                """.formatted(project.getId(), leader.getId(), leader.getId())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createTask_unauthenticatedRequest_isRejected() throws Exception {
+        mockMvc.perform(post("/api/todo/tasks")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "projectId": %d,
+                                  "title": "Prepare supplies",
+                                  "leaderIds": [],
+                                  "memberIds": []
+                                }
+                                """.formatted(project.getId())))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void updateTask_byTaskLeader_returnsUpdatedTask() throws Exception {
+        mockMvc.perform(put("/api/todo/tasks/{taskId}", task.getId())
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Prepare supplies for camp",
+                                  "description": "Buy extra camping supplies"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(task.getId().intValue()))
+                .andExpect(jsonPath("$.projectId").value(project.getId().intValue()))
+                .andExpect(jsonPath("$.title").value("Prepare supplies for camp"))
+                .andExpect(jsonPath("$.description").value("Buy extra camping supplies"))
+                .andExpect(jsonPath("$.leaderIds[0]").value(leader.getId().intValue()))
+                .andExpect(jsonPath("$.memberIds[0]").value(member.getId().intValue()))
+                .andExpect(jsonPath("$.leaders").doesNotExist())
+                .andExpect(jsonPath("$.members").doesNotExist());
+    }
+
+    @Test
+    void updateTask_replacesLeadersAndMembers() throws Exception {
+        mockMvc.perform(put("/api/todo/tasks/{taskId}", task.getId())
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Prepare supplies",
+                                  "leaderIds": [%d],
+                                  "memberIds": []
+                                }
+                                """.formatted(member.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.leaderIds[0]").value(member.getId().intValue()))
+                .andExpect(jsonPath("$.memberIds").isEmpty());
+    }
+
+    @Test
+    void updateTask_byNonTaskLeader_returnsForbidden() throws Exception {
+        MvcResult memberLogin = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "Bob",
+                                  "password": "%s"
+                                }
+                                """.formatted(PASSWORD)))
+                .andExpect(status().isOk())
+                .andReturn();
+        MockHttpSession memberSession = (MockHttpSession) memberLogin.getRequest().getSession();
+
+        mockMvc.perform(put("/api/todo/tasks/{taskId}", task.getId())
+                        .session(memberSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Hijacked",
+                                  "leaderIds": [],
+                                  "memberIds": []
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void updateTask_missingTask_returnsNotFound() throws Exception {
+        mockMvc.perform(put("/api/todo/tasks/{taskId}", 9999L)
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Prepare supplies",
+                                  "leaderIds": [],
+                                  "memberIds": []
+                                }
+                                """))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void updateTask_unauthenticatedRequest_isRejected() throws Exception {
+        mockMvc.perform(put("/api/todo/tasks/{taskId}", task.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Prepare supplies",
+                                  "leaderIds": [],
+                                  "memberIds": []
+                                }
+                                """))
+                .andExpect(status().isUnauthorized());
+    }
+
     private MockHttpSession createManagerSession(String username, String phone) throws Exception {
         return login(createManagerUser(username, phone));
     }

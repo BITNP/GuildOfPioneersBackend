@@ -539,6 +539,40 @@ Keep entries sorted by path, then by HTTP method.
   - `401 UNAUTHORIZED` - not authenticated.
   - `404 NOT_FOUND` - the project does not exist.
 
+### `POST /api/todo/tasks`
+
+- **Description**: Creates a task under a project with its leaders and members. Any member of the owning project (leader or member) may create a task, and so may any user in the `ADMIN` department. The creating user is always added as a leader of the task, even when not listed in `leaderIds`. A user may not appear in both the leader and member lists (including the auto-added creator), and every referenced user must exist. The task's `createdDate` and `updatedDate` are set to the current time, and the owning project's `updatedDate` is bumped to the current time. The response carries the task's own fields and the member user ids only; user name/avatar summaries are resolved by the `GET` endpoints.
+- **Authentication**: Authenticated session. The current user must be a member of the owning project, or a member of the `ADMIN` department.
+- **Request Body**: `CreateTaskRequest`:
+  - `projectId` (integer, required) - the id of the owning project; must exist.
+  - `title` (string, required) - the task title; must not be blank.
+  - `description` (string, optional) - the task description; may be `null` or empty.
+  - `leaderIds` (array of integers, optional) - the user ids to assign as leaders.
+  - `memberIds` (array of integers, optional) - the user ids to assign as members.
+- **Path Parameters**: -
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `201 CREATED`
+  - **Body**: `TodoTaskUpdateResponse` - the created task without resolved user summaries.
+    ```json
+    {
+      "id": 5,
+      "projectId": 1,
+      "title": "Prepare supplies",
+      "description": "Buy camping supplies",
+      "createdDate": "2026-08-15T08:00:00.000Z",
+      "updatedDate": "2026-08-15T08:00:00.000Z",
+      "endDate": null,
+      "leaderIds": [1],
+      "memberIds": [2]
+    }
+    ```
+- **Error Responses**:
+  - `400 BAD_REQUEST` - `title` missing or blank, a user appears in both `leaderIds` and `memberIds`, or a referenced user does not exist.
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `403 FORBIDDEN` - the current user is not a member of the owning project.
+  - `404 NOT_FOUND` - the owning project does not exist.
+
 ### `GET /api/todo/tasks/{taskId}`
 
 - **Description**: Returns a single task with its leaders and members.
@@ -577,6 +611,39 @@ Keep entries sorted by path, then by HTTP method.
     ```
 - **Error Responses**:
   - `401 UNAUTHORIZED` - not authenticated.
+  - `404 NOT_FOUND` - the task does not exist.
+
+### `PUT /api/todo/tasks/{taskId}`
+
+- **Description**: Updates a task's title and description, optionally replacing its leaders and members. The task's leaders may edit it, and so may any user in the `ADMIN` department (who may edit any task). When `leaderIds` or `memberIds` is provided, the corresponding membership list is replaced entirely; when absent it is left unchanged. A user may not appear in both lists, and every referenced user must exist. The task's `updatedDate` is bumped to the current time, and the owning project's `updatedDate` is bumped to the current time as well. The response carries the task's own fields and the member user ids only; user name/avatar summaries are resolved by the `GET` endpoints.
+- **Authentication**: Authenticated session. The current user must be a leader of the task, or a member of the `ADMIN` department.
+- **Request Body**: `UpdateTaskRequest`:
+  - `title` (string, required) - the task title; must not be blank.
+  - `description` (string, optional) - the task description; may be `null` or empty to clear it.
+  - `leaderIds` (array of integers, optional) - the user ids to assign as leaders; replaces the current leader list when provided.
+  - `memberIds` (array of integers, optional) - the user ids to assign as members; replaces the current member list when provided.
+- **Path Parameters**: `taskId` (integer) - the task's id.
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**: `TodoTaskUpdateResponse` - the updated task without resolved user summaries.
+    ```json
+    {
+      "id": 1,
+      "projectId": 1,
+      "title": "Prepare supplies for camp",
+      "description": "Buy camping supplies",
+      "createdDate": "2026-08-13T08:00:00.000Z",
+      "updatedDate": "2026-08-15T10:00:00.000Z",
+      "endDate": null,
+      "leaderIds": [1],
+      "memberIds": [2]
+    }
+    ```
+- **Error Responses**:
+  - `400 BAD_REQUEST` - `title` missing or blank, a user appears in both `leaderIds` and `memberIds`, or a referenced user does not exist.
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `403 FORBIDDEN` - the current user is not a leader of the task.
   - `404 NOT_FOUND` - the task does not exist.
 
 ### `GET /api/users`

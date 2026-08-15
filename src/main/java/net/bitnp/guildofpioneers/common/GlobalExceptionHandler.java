@@ -7,6 +7,7 @@ import net.bitnp.guildofpioneers.storage.StoredFileNotFoundException;
 import net.bitnp.guildofpioneers.ticket.TicketExpiredException;
 import net.bitnp.guildofpioneers.ticket.TicketNotFoundException;
 import net.bitnp.guildofpioneers.todo.exception.InvalidProjectRequestException;
+import net.bitnp.guildofpioneers.todo.exception.InvalidTaskRequestException;
 import net.bitnp.guildofpioneers.todo.exception.NotProjectLeaderException;
 import net.bitnp.guildofpioneers.todo.exception.TodoActionNotFoundException;
 import net.bitnp.guildofpioneers.todo.exception.TodoProjectNotFoundException;
@@ -107,6 +108,14 @@ public class GlobalExceptionHandler {
             InvalidProjectRequestException ex, HttpServletRequest request
     ) {
         log.trace("Project creation rejected: {}", ex.getMessage());
+        return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(InvalidTaskRequestException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidTaskRequest(
+            InvalidTaskRequestException ex, HttpServletRequest request
+    ) {
+        log.trace("Task creation rejected: {}", ex.getMessage());
         return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), request);
     }
 

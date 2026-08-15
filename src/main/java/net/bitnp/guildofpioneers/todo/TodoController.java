@@ -115,6 +115,24 @@ public class TodoController {
     }
 
     /**
+     * Creates a task under a project with its leaders and members. Any member of
+     * the owning project (leader or member) may create a task, as may any admin.
+     * The creating user is always added as a leader of the task.
+     *
+     * @param request        the validated task data
+     * @param authentication the current authentication
+     * @return the created task, without resolved user summaries
+     */
+    @PostMapping("/tasks")
+    @ResponseStatus(HttpStatus.CREATED)
+    public TodoTaskUpdateResponse createTask(
+            @Valid @RequestBody CreateTaskRequest request,
+            Authentication authentication
+    ) {
+        return todoService.createTask(request, authentication);
+    }
+
+    /**
      * Returns a single task.
      *
      * @param taskId the task id
@@ -122,6 +140,25 @@ public class TodoController {
     @GetMapping("/tasks/{taskId}")
     public TodoTaskResponse getTask(@PathVariable Long taskId) {
         return todoService.getTask(taskId);
+    }
+
+    /**
+     * Updates a task's title and description, optionally replacing its leaders
+     * and members. Task leaders are allowed, as is any user in the ADMIN
+     * department.
+     *
+     * @param taskId         the task id
+     * @param request        the validated title, description, and membership lists
+     * @param authentication the current authentication
+     * @return the updated task, without resolved user summaries
+     */
+    @PutMapping("/tasks/{taskId}")
+    public TodoTaskUpdateResponse updateTask(
+            @PathVariable Long taskId,
+            @Valid @RequestBody UpdateTaskRequest request,
+            Authentication authentication
+    ) {
+        return todoService.updateTask(taskId, request, authentication);
     }
 
     /**
