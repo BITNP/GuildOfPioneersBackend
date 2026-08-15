@@ -429,7 +429,7 @@ class TodoServiceTest {
         when(todoProjectRepository.findById(1L)).thenReturn(Optional.of(project));
         when(permissionService.currentUser(authentication)).thenReturn(user);
         when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
-        when(userRepository.findAllById(anyList())).thenReturn(List.of(user, user));
+        when(todoProjectLeaderRepository.existsById(any())).thenReturn(true);
         TodoTask saved = TodoTask.builder()
                 .id(10L)
                 .projectId(1L)
@@ -475,7 +475,7 @@ class TodoServiceTest {
         when(todoProjectRepository.findById(1L)).thenReturn(Optional.of(project));
         when(permissionService.currentUser(authentication)).thenReturn(user);
         when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
-        when(userRepository.findAllById(anyList())).thenReturn(List.of(user, user));
+        when(todoProjectLeaderRepository.existsById(any())).thenReturn(true);
         TodoTask saved = TodoTask.builder()
                 .id(12L)
                 .projectId(1L)
@@ -561,7 +561,6 @@ class TodoServiceTest {
         when(todoProjectRepository.findById(1L)).thenReturn(Optional.of(project));
         when(permissionService.currentUser(authentication)).thenReturn(user);
         when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
-        when(userRepository.findAllById(anyList())).thenReturn(List.of());
 
         CreateTaskRequest request = CreateTaskRequest.builder()
                 .projectId(1L)
@@ -572,6 +571,69 @@ class TodoServiceTest {
         assertThatThrownBy(() -> todoService.createTask(request, authentication))
                 .isInstanceOf(InvalidTaskRequestException.class);
         verify(todoTaskRepository, never()).save(any());
+    }
+
+    @Test
+    void createTask_withUserNotInProject_throwsInvalidTaskRequest() {
+        TodoProject project = TodoProject.builder()
+                .id(1L)
+                .title("Autumn Camp")
+                .createdDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .updatedDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .build();
+        when(todoProjectRepository.findById(1L)).thenReturn(Optional.of(project));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
+
+        CreateTaskRequest request = CreateTaskRequest.builder()
+                .projectId(1L)
+                .title("Prepare supplies")
+                .leaderIds(List.of(1L))
+                .memberIds(List.of(99L))
+                .build();
+
+        assertThatThrownBy(() -> todoService.createTask(request, authentication))
+                .isInstanceOf(InvalidTaskRequestException.class);
+        verify(todoTaskRepository, never()).save(any());
+    }
+
+    @Test
+    void createTask_byAdmin_canAssignUserNotInProject() {
+        TodoProject project = TodoProject.builder()
+                .id(1L)
+                .title("Autumn Camp")
+                .createdDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .updatedDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .build();
+        when(todoProjectRepository.findById(1L)).thenReturn(Optional.of(project));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
+        when(permissionService.isAdmin(user)).thenReturn(true);
+        when(userRepository.findAllById(anyList())).thenReturn(List.of(user, user));
+        TodoTask saved = TodoTask.builder()
+                .id(13L)
+                .projectId(1L)
+                .title("Prepare supplies")
+                .createdDate(Instant.parse("2026-08-15T08:00:00Z"))
+                .updatedDate(Instant.parse("2026-08-15T08:00:00Z"))
+                .build();
+        when(todoTaskRepository.save(any())).thenReturn(saved);
+        when(todoProjectRepository.save(any())).thenReturn(project);
+        when(todoTaskLeaderRepository.findById_TaskId(13L)).thenReturn(List.of(
+                TodoTaskLeader.builder().id(new TodoTaskLeaderKey(13L, 99L)).build()));
+
+        CreateTaskRequest request = CreateTaskRequest.builder()
+                .projectId(1L)
+                .title("Prepare supplies")
+                .leaderIds(List.of(99L))
+                .memberIds(List.of())
+                .build();
+
+        TodoTaskUpdateResponse response = todoService.createTask(request, authentication);
+
+        assertThat(response.getLeaderIds()).containsExactly(99L);
+        verify(todoTaskLeaderRepository).save(argThat(leader -> leader.getId().getUserId() == 99L));
+        verify(todoTaskMemberRepository, never()).save(any());
     }
 
     @Test
@@ -606,7 +668,7 @@ class TodoServiceTest {
         when(todoTaskRepository.findById(1L)).thenReturn(Optional.of(task));
         when(permissionService.currentUser(authentication)).thenReturn(user);
         when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
-        when(userRepository.findAllById(anyList())).thenReturn(List.of(user, user));
+        when(todoProjectLeaderRepository.existsById(any())).thenReturn(true);
         List<TodoTaskLeader> oldLeaders = List.of(
                 TodoTaskLeader.builder().id(new TodoTaskLeaderKey(1L, 1L)).build());
         List<TodoTaskLeader> newLeaders = List.of(
@@ -711,11 +773,34 @@ class TodoServiceTest {
         when(todoTaskRepository.findById(1L)).thenReturn(Optional.of(task));
         when(permissionService.currentUser(authentication)).thenReturn(user);
         when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
-        when(userRepository.findAllById(anyList())).thenReturn(List.of());
 
         UpdateTaskRequest request = UpdateTaskRequest.builder()
                 .title("Prepare supplies")
                 .leaderIds(List.of(99L))
+                .build();
+
+        assertThatThrownBy(() -> todoService.updateTask(1L, request, authentication))
+                .isInstanceOf(InvalidTaskRequestException.class);
+        verify(todoTaskRepository, never()).save(any());
+    }
+
+    @Test
+    void updateTask_withUserNotInProject_throwsInvalidTaskRequest() {
+        TodoTask task = TodoTask.builder()
+                .id(1L)
+                .projectId(1L)
+                .title("Prepare supplies")
+                .createdDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .updatedDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .build();
+        when(todoTaskRepository.findById(1L)).thenReturn(Optional.of(task));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
+
+        UpdateTaskRequest request = UpdateTaskRequest.builder()
+                .title("Prepare supplies")
+                .leaderIds(List.of(1L))
+                .memberIds(List.of(99L))
                 .build();
 
         assertThatThrownBy(() -> todoService.updateTask(1L, request, authentication))

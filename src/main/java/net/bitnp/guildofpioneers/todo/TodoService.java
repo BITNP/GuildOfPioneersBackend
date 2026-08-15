@@ -212,6 +212,19 @@ public class TodoService {
         }
     }
 
+    private void requireTaskUsersInProject(Long projectId, List<Long> leaderIds, List<Long> memberIds) {
+        List<Long> allIds = new ArrayList<>(leaderIds);
+        allIds.addAll(memberIds);
+        if (allIds.isEmpty()) {
+            return;
+        }
+        boolean allInProject = allIds.stream()
+                .allMatch(userId -> isProjectLeader(projectId, userId) || isProjectMember(projectId, userId));
+        if (!allInProject) {
+            throw new InvalidTaskRequestException("Task leaders and members must belong to the owning project");
+        }
+    }
+
     /**
      * Returns a single project with its leaders and members.
      *
@@ -255,14 +268,16 @@ public class TodoService {
      * Creates a task under a project with its leaders and members. Any member of
      * the owning project (leader or member) may create a task, as may any admin.
      * The creating user is always added as a leader of the task. A user may not
-     * be both a leader and a member, and every referenced user must exist.
+     * be both a leader and a member, and every referenced user must exist. For
+     * non-admin creators, every task leader and member must belong to the owning
+     * project; admins may assign any existing user.
      *
      * @param request        the validated task data
      * @param authentication the current authentication
      * @return the created task, with member ids but without resolved user summaries
      * @throws TodoProjectNotFoundException if the owning project does not exist
      * @throws PermissionDeniedException    if the current user is not a project member and not an admin
-     * @throws InvalidTaskRequestException  if a user is both leader and member, or a referenced user does not exist
+     * @throws InvalidTaskRequestException  if a user is both leader and member, a referenced user does not exist, or an assignee is not a member of the owning project
      */
     @Transactional
     public TodoTaskUpdateResponse createTask(
@@ -282,7 +297,11 @@ public class TodoService {
         if (leaderIds.stream().anyMatch(memberIds::contains)) {
             throw new InvalidTaskRequestException("A user cannot be both a leader and a member of the same task");
         }
-        requireTaskUsersExist(leaderIds, memberIds);
+        if (permissionService.isAdmin(user)) {
+            requireTaskUsersExist(leaderIds, memberIds);
+        } else {
+            requireTaskUsersInProject(projectId, leaderIds, memberIds);
+        }
 
         Instant now = Instant.now();
         TodoTask task = todoTaskRepository.save(TodoTask.builder()
@@ -310,6 +329,8 @@ public class TodoService {
      * task's updated date and propagates up to the owning project. When
      * {@code leaderIds} or {@code memberIds} is provided, the corresponding
      * membership list is replaced entirely; when absent it is left unchanged.
+     * For non-admin editors, every task leader and member must belong to the
+     * owning project; admins may assign any existing user.
      *
      * @param taskId         the task id
      * @param request        the validated title, description, and membership lists
@@ -317,7 +338,7 @@ public class TodoService {
      * @return the updated task, with member ids but without resolved user summaries
      * @throws TodoTaskNotFoundException if the task does not exist
      * @throws PermissionDeniedException  if the current user is neither a task leader nor an admin
-     * @throws InvalidTaskRequestException if a user is both leader and member, or a referenced user does not exist
+     * @throws InvalidTaskRequestException if a user is both leader and member, a referenced user does not exist, or an assignee is not a member of the owning project
      */
     @Transactional
     public TodoTaskUpdateResponse updateTask(
@@ -338,7 +359,11 @@ public class TodoService {
             if (leaderIds.stream().anyMatch(memberIds::contains)) {
                 throw new InvalidTaskRequestException("A user cannot be both a leader and a member of the same task");
             }
-            requireTaskUsersExist(leaderIds, memberIds);
+            if (permissionService.isAdmin(user)) {
+                requireTaskUsersExist(leaderIds, memberIds);
+            } else {
+                requireTaskUsersInProject(task.getProjectId(), leaderIds, memberIds);
+            }
             replaceTaskMembers(taskId, leaderIds, memberIds);
         }
         task.setTitle(request.getTitle());
@@ -460,12 +485,20 @@ public class TodoService {
     }
 
     private boolean isProjectLeader(Long projectId, User user) {
-        return todoProjectLeaderRepository.existsById(new TodoProjectLeaderKey(projectId, user.getId()));
+        return isProjectLeader(projectId, user.getId());
+    }
+
+    private boolean isProjectLeader(Long projectId, Long userId) {
+        return todoProjectLeaderRepository.existsById(new TodoProjectLeaderKey(projectId, userId));
+    }
+
+    private boolean isProjectMember(Long projectId, Long userId) {
+        return todoProjectMemberRepository.existsById(new TodoProjectMemberKey(projectId, userId));
     }
 
     private boolean isProjectMemberOrLeader(Long projectId, User user) {
-        return todoProjectLeaderRepository.existsById(new TodoProjectLeaderKey(projectId, user.getId()))
-                || todoProjectMemberRepository.existsById(new TodoProjectMemberKey(projectId, user.getId()));
+        return isProjectLeader(projectId, user.getId())
+                || isProjectMember(projectId, user.getId());
     }
 
     private boolean isTaskLeader(Long taskId, User user) {

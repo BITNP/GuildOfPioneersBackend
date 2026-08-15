@@ -541,7 +541,7 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `POST /api/todo/tasks`
 
-- **Description**: Creates a task under a project with its leaders and members. Any member of the owning project (leader or member) may create a task, and so may any user in the `ADMIN` department. The creating user is always added as a leader of the task, even when not listed in `leaderIds`. A user may not appear in both the leader and member lists (including the auto-added creator), and every referenced user must exist. The task's `createdDate` and `updatedDate` are set to the current time, and the owning project's `updatedDate` is bumped to the current time. The response carries the task's own fields and the member user ids only; user name/avatar summaries are resolved by the `GET` endpoints.
+- **Description**: Creates a task under a project with its leaders and members. Any member of the owning project (leader or member) may create a task, and so may any user in the `ADMIN` department. The creating user is always added as a leader of the task, even when not listed in `leaderIds`. A user may not appear in both the leader and member lists (including the auto-added creator), and every referenced user must exist. For non-admin creators, every task leader and member must belong to the owning project; admins may assign any existing user. The task's `createdDate` and `updatedDate` are set to the current time, and the owning project's `updatedDate` is bumped to the current time. The response carries the task's own fields and the member user ids only; user name/avatar summaries are resolved by the `GET` endpoints.
 - **Authentication**: Authenticated session. The current user must be a member of the owning project, or a member of the `ADMIN` department.
 - **Request Body**: `CreateTaskRequest`:
   - `projectId` (integer, required) - the id of the owning project; must exist.
@@ -568,7 +568,7 @@ Keep entries sorted by path, then by HTTP method.
     }
     ```
 - **Error Responses**:
-  - `400 BAD_REQUEST` - `title` missing or blank, a user appears in both `leaderIds` and `memberIds`, or a referenced user does not exist.
+  - `400 BAD_REQUEST` - `title` missing or blank, a user appears in both `leaderIds` and `memberIds`, a referenced user does not exist, or an assignee is not a member of the owning project (admins are exempt).
   - `401 UNAUTHORIZED` - not authenticated.
   - `403 FORBIDDEN` - the current user is not a member of the owning project.
   - `404 NOT_FOUND` - the owning project does not exist.
@@ -615,7 +615,7 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `PUT /api/todo/tasks/{taskId}`
 
-- **Description**: Updates a task's title and description, optionally replacing its leaders and members. The task's leaders may edit it, and so may any user in the `ADMIN` department (who may edit any task). When `leaderIds` or `memberIds` is provided, the corresponding membership list is replaced entirely; when absent it is left unchanged. A user may not appear in both lists, and every referenced user must exist. The task's `updatedDate` is bumped to the current time, and the owning project's `updatedDate` is bumped to the current time as well. The response carries the task's own fields and the member user ids only; user name/avatar summaries are resolved by the `GET` endpoints.
+- **Description**: Updates a task's title and description, optionally replacing its leaders and members. The task's leaders may edit it, and so may any user in the `ADMIN` department (who may edit any task). When `leaderIds` or `memberIds` is provided, the corresponding membership list is replaced entirely; when absent it is left unchanged. A user may not appear in both lists, and every referenced user must exist. For non-admin editors, every task leader and member must belong to the owning project; admins may assign any existing user. The task's `updatedDate` is bumped to the current time, and the owning project's `updatedDate` is bumped to the current time as well. The response carries the task's own fields and the member user ids only; user name/avatar summaries are resolved by the `GET` endpoints.
 - **Authentication**: Authenticated session. The current user must be a leader of the task, or a member of the `ADMIN` department.
 - **Request Body**: `UpdateTaskRequest`:
   - `title` (string, required) - the task title; must not be blank.
@@ -641,7 +641,7 @@ Keep entries sorted by path, then by HTTP method.
     }
     ```
 - **Error Responses**:
-  - `400 BAD_REQUEST` - `title` missing or blank, a user appears in both `leaderIds` and `memberIds`, or a referenced user does not exist.
+  - `400 BAD_REQUEST` - `title` missing or blank, a user appears in both `leaderIds` and `memberIds`, a referenced user does not exist, or an assignee is not a member of the owning project (admins are exempt).
   - `401 UNAUTHORIZED` - not authenticated.
   - `403 FORBIDDEN` - the current user is not a leader of the task.
   - `404 NOT_FOUND` - the task does not exist.

@@ -794,6 +794,68 @@ class TodoControllerIntegrationTest {
     }
 
     @Test
+    void createTask_withUserNotInProject_returnsBadRequest() throws Exception {
+        User outsider = userRepository.save(User.builder()
+                .userName("Carol")
+                .phone("13000000004")
+                .email("carol@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+
+        mockMvc.perform(post("/api/todo/tasks")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "projectId": %d,
+                                  "title": "Prepare supplies",
+                                  "leaderIds": [],
+                                  "memberIds": [%d]
+                                }
+                                """.formatted(project.getId(), outsider.getId())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createTask_byAdmin_canAssignUserNotInProject() throws Exception {
+        User admin = userRepository.save(User.builder()
+                .userName("Admin")
+                .phone("13000000002")
+                .email("admin@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+        userDepartmentRepository.save(UserDepartment.builder()
+                .userId(admin.getId())
+                .department(Department.ADMIN)
+                .role(DepartmentRole.LEADER)
+                .build());
+        User outsider = userRepository.save(User.builder()
+                .userName("Carol")
+                .phone("13000000004")
+                .email("carol@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+        MockHttpSession adminSession = login(admin);
+
+        mockMvc.perform(post("/api/todo/tasks")
+                        .session(adminSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "projectId": %d,
+                                  "title": "Book venue",
+                                  "leaderIds": [%d],
+                                  "memberIds": []
+                                }
+                                """.formatted(project.getId(), outsider.getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.leaderIds", hasSize(2)))
+                .andExpect(jsonPath("$.leaderIds", hasItems(
+                        admin.getId().intValue(), outsider.getId().intValue())))
+                .andExpect(jsonPath("$.memberIds").isEmpty());
+    }
+
+    @Test
     void createTask_unauthenticatedRequest_isRejected() throws Exception {
         mockMvc.perform(post("/api/todo/tasks")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -872,6 +934,28 @@ class TodoControllerIntegrationTest {
                                 }
                                 """))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void updateTask_withUserNotInProject_returnsBadRequest() throws Exception {
+        User outsider = userRepository.save(User.builder()
+                .userName("Carol")
+                .phone("13000000004")
+                .email("carol@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+
+        mockMvc.perform(put("/api/todo/tasks/{taskId}", task.getId())
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Prepare supplies",
+                                  "leaderIds": [],
+                                  "memberIds": [%d]
+                                }
+                                """.formatted(outsider.getId())))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
