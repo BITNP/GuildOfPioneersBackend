@@ -4,6 +4,8 @@ import lombok.extern.slf4j.Slf4j;
 import net.bitnp.guildofpioneers.common.PermissionService;
 import net.bitnp.guildofpioneers.storage.FileStorageService;
 import net.bitnp.guildofpioneers.todo.entity.TodoAction;
+import net.bitnp.guildofpioneers.todo.entity.TodoActionMember;
+import net.bitnp.guildofpioneers.todo.entity.TodoActionMemberKey;
 import net.bitnp.guildofpioneers.todo.entity.TodoProject;
 import net.bitnp.guildofpioneers.todo.entity.TodoProjectLeader;
 import net.bitnp.guildofpioneers.todo.entity.TodoProjectLeaderKey;
@@ -14,6 +16,7 @@ import net.bitnp.guildofpioneers.todo.entity.TodoTaskLeader;
 import net.bitnp.guildofpioneers.todo.entity.TodoTaskLeaderKey;
 import net.bitnp.guildofpioneers.todo.entity.TodoTaskMember;
 import net.bitnp.guildofpioneers.todo.entity.TodoTaskMemberKey;
+import net.bitnp.guildofpioneers.todo.exception.InvalidActionRequestException;
 import net.bitnp.guildofpioneers.todo.exception.InvalidProjectRequestException;
 import net.bitnp.guildofpioneers.todo.exception.InvalidTaskRequestException;
 import net.bitnp.guildofpioneers.todo.exception.NotProjectLeaderException;
@@ -38,6 +41,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -200,18 +204,6 @@ public class TodoService {
         }
     }
 
-    private void requireTaskUsersExist(List<Long> leaderIds, List<Long> memberIds) {
-        List<Long> allIds = new ArrayList<>(leaderIds);
-        allIds.addAll(memberIds);
-        if (allIds.isEmpty()) {
-            return;
-        }
-        long existing = userRepository.findAllById(allIds).size();
-        if (existing != allIds.size()) {
-            throw new InvalidTaskRequestException("One or more referenced users do not exist");
-        }
-    }
-
     private void requireTaskUsersInProject(Long projectId, List<Long> leaderIds, List<Long> memberIds) {
         List<Long> allIds = new ArrayList<>(leaderIds);
         allIds.addAll(memberIds);
@@ -223,6 +215,34 @@ public class TodoService {
         if (!allInProject) {
             throw new InvalidTaskRequestException("Task leaders and members must belong to the owning project");
         }
+    }
+
+    private void requireActionUsersInProject(Long projectId, List<Long> memberIds) {
+        if (memberIds.isEmpty()) {
+            return;
+        }
+        boolean allInProject = memberIds.stream()
+                .allMatch(userId -> isProjectLeader(projectId, userId) || isProjectMember(projectId, userId));
+        if (!allInProject) {
+            throw new InvalidActionRequestException("Action members must belong to the owning project");
+        }
+    }
+
+    /**
+     * Ensures every given user is a member of the task, adding them as task
+     * members when they are not already a leader or member of the task.
+     *
+     * @param taskId    the task id
+     * @param memberIds the user ids to guarantee as task members
+     */
+    private void ensureTaskMembers(Long taskId, List<Long> memberIds) {
+        Set<Long> current = new HashSet<>(taskLeaderIds(taskId));
+        current.addAll(taskMemberIds(taskId));
+        memberIds.stream()
+                .filter(userId -> !current.contains(userId))
+                .forEach(userId -> todoTaskMemberRepository.save(TodoTaskMember.builder()
+                        .id(new TodoTaskMemberKey(taskId, userId))
+                        .build()));
     }
 
     /**
@@ -267,17 +287,16 @@ public class TodoService {
     /**
      * Creates a task under a project with its leaders and members. Any member of
      * the owning project (leader or member) may create a task, as may any admin.
-     * The creating user is always added as a leader of the task. A user may not
-     * be both a leader and a member, and every referenced user must exist. For
-     * non-admin creators, every task leader and member must belong to the owning
-     * project; admins may assign any existing user.
+     * When the creating user belongs to the owning project they are added as a
+     * leader of the task. A user may not be both a leader and a member, and every
+     * task leader and member must belong to the owning project.
      *
      * @param request        the validated task data
      * @param authentication the current authentication
      * @return the created task, with member ids but without resolved user summaries
      * @throws TodoProjectNotFoundException if the owning project does not exist
      * @throws PermissionDeniedException    if the current user is not a project member and not an admin
-     * @throws InvalidTaskRequestException  if a user is both leader and member, a referenced user does not exist, or an assignee is not a member of the owning project
+     * @throws InvalidTaskRequestException  if a user is both leader and member, or an assignee is not a member of the owning project
      */
     @Transactional
     public TodoTaskUpdateResponse createTask(
@@ -291,17 +310,13 @@ public class TodoService {
         }
         List<Long> memberIds = distinctIds(request.getMemberIds());
         List<Long> leaderIds = new ArrayList<>(distinctIds(request.getLeaderIds()));
-        if (!leaderIds.contains(user.getId())) {
+        if (!leaderIds.contains(user.getId()) && isProjectMemberOrLeader(projectId, user)) {
             leaderIds.add(user.getId());
         }
         if (leaderIds.stream().anyMatch(memberIds::contains)) {
             throw new InvalidTaskRequestException("A user cannot be both a leader and a member of the same task");
         }
-        if (permissionService.isAdmin(user)) {
-            requireTaskUsersExist(leaderIds, memberIds);
-        } else {
-            requireTaskUsersInProject(projectId, leaderIds, memberIds);
-        }
+        requireTaskUsersInProject(projectId, leaderIds, memberIds);
 
         Instant now = Instant.now();
         TodoTask task = todoTaskRepository.save(TodoTask.builder()
@@ -329,8 +344,7 @@ public class TodoService {
      * task's updated date and propagates up to the owning project. When
      * {@code leaderIds} or {@code memberIds} is provided, the corresponding
      * membership list is replaced entirely; when absent it is left unchanged.
-     * For non-admin editors, every task leader and member must belong to the
-     * owning project; admins may assign any existing user.
+     * Every task leader and member must belong to the owning project.
      *
      * @param taskId         the task id
      * @param request        the validated title, description, and membership lists
@@ -338,7 +352,7 @@ public class TodoService {
      * @return the updated task, with member ids but without resolved user summaries
      * @throws TodoTaskNotFoundException if the task does not exist
      * @throws PermissionDeniedException  if the current user is neither a task leader nor an admin
-     * @throws InvalidTaskRequestException if a user is both leader and member, a referenced user does not exist, or an assignee is not a member of the owning project
+     * @throws InvalidTaskRequestException if a user is both leader and member, or an assignee is not a member of the owning project
      */
     @Transactional
     public TodoTaskUpdateResponse updateTask(
@@ -359,11 +373,7 @@ public class TodoService {
             if (leaderIds.stream().anyMatch(memberIds::contains)) {
                 throw new InvalidTaskRequestException("A user cannot be both a leader and a member of the same task");
             }
-            if (permissionService.isAdmin(user)) {
-                requireTaskUsersExist(leaderIds, memberIds);
-            } else {
-                requireTaskUsersInProject(task.getProjectId(), leaderIds, memberIds);
-            }
+            requireTaskUsersInProject(task.getProjectId(), leaderIds, memberIds);
             replaceTaskMembers(taskId, leaderIds, memberIds);
         }
         task.setTitle(request.getTitle());
@@ -400,6 +410,149 @@ public class TodoService {
     @Transactional(readOnly = true)
     public TodoActionResponse getAction(Long actionId) {
         return toActionResponse(findAction(actionId));
+    }
+
+    /**
+     * Creates an action under a task with its members. Any member of the owning
+     * task (leader or member) may create an action, as may any admin. When the
+     * creating user belongs to the owning project they are added as a member of
+     * the action. Every action member must belong to the owning project. Members
+     * who are not already part of the owning task are added to it as task members.
+     *
+     * @param request        the validated action data
+     * @param authentication the current authentication
+     * @return the created action response
+     * @throws TodoTaskNotFoundException       if the owning task does not exist
+     * @throws PermissionDeniedException       if the current user is not a task member and not an admin
+     * @throws InvalidActionRequestException   if an assignee is not a member of the owning project
+     */
+    @Transactional
+    public TodoActionResponse createAction(
+            CreateActionRequest request, Authentication authentication
+    ) {
+        Long taskId = request.getTaskId();
+        TodoTask task = findTask(taskId);
+        User user = permissionService.currentUser(authentication);
+        if (!permissionService.isAdminOr(user, () -> isTaskMemberOrLeader(taskId, user))) {
+            throw new PermissionDeniedException("Only members of the task can create actions");
+        }
+        List<Long> memberIds = new ArrayList<>(distinctIds(request.getMemberIds()));
+        if (!memberIds.contains(user.getId()) && isProjectMemberOrLeader(task.getProjectId(), user)) {
+            memberIds.add(user.getId());
+        }
+        requireActionUsersInProject(task.getProjectId(), memberIds);
+
+        Instant now = Instant.now();
+        TodoAction action = todoActionRepository.save(TodoAction.builder()
+                .taskId(taskId)
+                .title(request.getTitle())
+                .description(blankToNull(request.getDescription()))
+                .createdDate(now)
+                .updatedDate(now)
+                .build());
+        memberIds.forEach(userId -> todoActionMemberRepository.save(TodoActionMember.builder()
+                .id(new TodoActionMemberKey(action.getId(), userId))
+                .build()));
+        ensureTaskMembers(taskId, memberIds);
+        touchTask(taskId);
+        log.trace("Action {} created by {}", action.getId(), authentication.getName());
+        return toActionResponse(action);
+    }
+
+    /**
+     * Updates an action's title and description, optionally replacing its
+     * members. Only a member of the action may edit it, unless the current user
+     * is an admin, in which case any action may be edited; the change bumps the
+     * action's updated date and propagates up to the owning task and project.
+     * When {@code memberIds} is provided, the membership list is replaced
+     * entirely; when absent it is left unchanged. Every action member must
+     * belong to the owning project. Members who are not already part of the
+     * owning task are added to it as task members.
+     *
+     * @param actionId       the action id
+     * @param request        the validated title, description, and member list
+     * @param authentication the current authentication
+     * @return the updated action response
+     * @throws TodoActionNotFoundException    if the action does not exist
+     * @throws PermissionDeniedException      if the current user is neither an action member nor an admin
+     * @throws InvalidActionRequestException  if an assignee is not a member of the owning project
+     */
+    @Transactional
+    public TodoActionResponse updateAction(
+            Long actionId, UpdateActionRequest request, Authentication authentication
+    ) {
+        TodoAction action = findAction(actionId);
+        User user = permissionService.currentUser(authentication);
+        if (!permissionService.isAdminOr(user, () -> isActionMember(actionId, user))) {
+            throw new PermissionDeniedException("Only a member of the action can edit it");
+        }
+        if (request.getMemberIds() != null) {
+            List<Long> memberIds = distinctIds(request.getMemberIds());
+            TodoTask task = findTask(action.getTaskId());
+            requireActionUsersInProject(task.getProjectId(), memberIds);
+            replaceActionMembers(actionId, memberIds);
+            ensureTaskMembers(task.getId(), memberIds);
+        }
+        action.setTitle(request.getTitle());
+        action.setDescription(blankToNull(request.getDescription()));
+        action.setUpdatedDate(Instant.now());
+        todoActionRepository.save(action);
+        touchTask(action.getTaskId());
+        log.trace("Action {} updated", actionId);
+        return toActionResponse(action);
+    }
+
+    /**
+     * Marks an action as finished by setting its end date to the current time
+     * and bumping its updated date, which propagates to the owning task and
+     * project. Only a member of the action may finish it, unless the current
+     * user is an admin.
+     *
+     * @param actionId       the action id
+     * @param authentication the current authentication
+     * @return the updated action response
+     * @throws TodoActionNotFoundException if the action does not exist
+     * @throws PermissionDeniedException   if the current user is neither an action member nor an admin
+     */
+    @Transactional
+    public TodoActionResponse finishAction(Long actionId, Authentication authentication) {
+        TodoAction action = findAction(actionId);
+        User user = permissionService.currentUser(authentication);
+        if (!permissionService.isAdminOr(user, () -> isActionMember(actionId, user))) {
+            throw new PermissionDeniedException("Only a member of the action can finish it");
+        }
+        action.setEndDate(Instant.now());
+        action.setUpdatedDate(Instant.now());
+        todoActionRepository.save(action);
+        touchTask(action.getTaskId());
+        log.trace("Action {} finished", actionId);
+        return toActionResponse(action);
+    }
+
+    /**
+     * Reopens a finished action by clearing its end date and bumping its updated
+     * date, which propagates to the owning task and project. Only a member of
+     * the action may reopen it, unless the current user is an admin.
+     *
+     * @param actionId       the action id
+     * @param authentication the current authentication
+     * @return the updated action response
+     * @throws TodoActionNotFoundException if the action does not exist
+     * @throws PermissionDeniedException   if the current user is neither an action member nor an admin
+     */
+    @Transactional
+    public TodoActionResponse unfinishAction(Long actionId, Authentication authentication) {
+        TodoAction action = findAction(actionId);
+        User user = permissionService.currentUser(authentication);
+        if (!permissionService.isAdminOr(user, () -> isActionMember(actionId, user))) {
+            throw new PermissionDeniedException("Only a member of the action can reopen it");
+        }
+        action.setEndDate(null);
+        action.setUpdatedDate(Instant.now());
+        todoActionRepository.save(action);
+        touchTask(action.getTaskId());
+        log.trace("Action {} reopened", actionId);
+        return toActionResponse(action);
     }
 
     /**
@@ -484,6 +637,13 @@ public class TodoService {
                 .build()));
     }
 
+    private void replaceActionMembers(Long actionId, List<Long> memberIds) {
+        todoActionMemberRepository.deleteAll(todoActionMemberRepository.findById_ActionId(actionId));
+        memberIds.forEach(userId -> todoActionMemberRepository.save(TodoActionMember.builder()
+                .id(new TodoActionMemberKey(actionId, userId))
+                .build()));
+    }
+
     private boolean isProjectLeader(Long projectId, User user) {
         return isProjectLeader(projectId, user.getId());
     }
@@ -503,6 +663,22 @@ public class TodoService {
 
     private boolean isTaskLeader(Long taskId, User user) {
         return todoTaskLeaderRepository.existsById(new TodoTaskLeaderKey(taskId, user.getId()));
+    }
+
+    private boolean isTaskLeader(Long taskId, Long userId) {
+        return todoTaskLeaderRepository.existsById(new TodoTaskLeaderKey(taskId, userId));
+    }
+
+    private boolean isTaskMember(Long taskId, Long userId) {
+        return todoTaskMemberRepository.existsById(new TodoTaskMemberKey(taskId, userId));
+    }
+
+    private boolean isTaskMemberOrLeader(Long taskId, User user) {
+        return isTaskLeader(taskId, user) || isTaskMember(taskId, user.getId());
+    }
+
+    private boolean isActionMember(Long actionId, User user) {
+        return todoActionMemberRepository.existsById(new TodoActionMemberKey(actionId, user.getId()));
     }
 
     private String blankToNull(String value) {

@@ -3,6 +3,7 @@ package net.bitnp.guildofpioneers.todo;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -179,5 +180,74 @@ public class TodoController {
     @GetMapping("/actions/{actionId}")
     public TodoActionResponse getAction(@PathVariable Long actionId) {
         return todoService.getAction(actionId);
+    }
+
+    /**
+     * Creates an action under a task with its members. Any member of the owning
+     * task (leader or member) may create an action, as may any admin. The
+     * creating user is always added as a member of the action.
+     *
+     * @param request        the validated action data
+     * @param authentication the current authentication
+     * @return the created action
+     */
+    @PostMapping("/actions")
+    @ResponseStatus(HttpStatus.CREATED)
+    public TodoActionResponse createAction(
+            @Valid @RequestBody CreateActionRequest request,
+            Authentication authentication
+    ) {
+        return todoService.createAction(request, authentication);
+    }
+
+    /**
+     * Updates an action's title and description, optionally replacing its
+     * members. Action members are allowed, as is any user in the ADMIN
+     * department.
+     *
+     * @param actionId       the action id
+     * @param request        the validated title, description, and member list
+     * @param authentication the current authentication
+     * @return the updated action
+     */
+    @PutMapping("/actions/{actionId}")
+    public TodoActionResponse updateAction(
+            @PathVariable Long actionId,
+            @Valid @RequestBody UpdateActionRequest request,
+            Authentication authentication
+    ) {
+        return todoService.updateAction(actionId, request, authentication);
+    }
+
+    /**
+     * Marks an action as finished by setting its end date to the current time.
+     * Action members are allowed, as is any user in the ADMIN department.
+     *
+     * @param actionId       the action id
+     * @param authentication the current authentication
+     * @return the updated action
+     */
+    @PutMapping("/actions/{actionId}/finish")
+    public TodoActionResponse finishAction(
+            @PathVariable Long actionId,
+            Authentication authentication
+    ) {
+        return todoService.finishAction(actionId, authentication);
+    }
+
+    /**
+     * Reopens a finished action by clearing its end date. Action members are
+     * allowed, as is any user in the ADMIN department.
+     *
+     * @param actionId       the action id
+     * @param authentication the current authentication
+     * @return the updated action
+     */
+    @DeleteMapping("/actions/{actionId}/finish")
+    public TodoActionResponse unfinishAction(
+            @PathVariable Long actionId,
+            Authentication authentication
+    ) {
+        return todoService.unfinishAction(actionId, authentication);
     }
 }

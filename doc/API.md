@@ -283,6 +283,38 @@ Keep entries sorted by path, then by HTTP method.
   - `401 UNAUTHORIZED` - not authenticated.
   - `404 NOT_FOUND` - the task does not exist.
 
+### `POST /api/todo/actions`
+
+- **Description**: Creates an action under a task with its members. Any member of the owning task (leader or member) may create an action, and so may any user in the `ADMIN` department. When the creating user belongs to the owning project, they are added as a member of the action even when not listed in `memberIds`. Every action member must belong to the owning project. Action members who are not already a leader or member of the owning task are added to it as task members. The action's `createdDate` and `updatedDate` are set to the current time, and the owning task's `updatedDate` and the owning project's `updatedDate` are bumped to the current time.
+- **Authentication**: Authenticated session. The current user must be a member of the owning task, or a member of the `ADMIN` department.
+- **Request Body**: `CreateActionRequest`:
+  - `taskId` (integer, required) - the id of the owning task; must exist.
+  - `title` (string, required) - the action title; must not be blank.
+  - `description` (string, optional) - the action description; may be `null` or empty.
+  - `memberIds` (array of integers, optional) - the user ids to assign as members.
+- **Path Parameters**: -
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `201 CREATED`
+  - **Body**:
+    ```json
+    {
+      "id": 3,
+      "taskId": 1,
+      "title": "Draft outline",
+      "description": "Outline the report",
+      "createdDate": "2026-08-15T08:00:00.000Z",
+      "updatedDate": "2026-08-15T08:00:00.000Z",
+      "endDate": null,
+      "memberIds": [1, 2]
+    }
+    ```
+- **Error Responses**:
+  - `400 BAD_REQUEST` - `title` missing or blank, a referenced user does not exist, or an assignee does not belong to the owning project.
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `403 FORBIDDEN` - the current user is not a member of the owning task.
+  - `404 NOT_FOUND` - the owning task does not exist.
+
 ### `GET /api/todo/actions/{actionId}`
 
 - **Description**: Returns a single action with its members.
@@ -306,6 +338,67 @@ Keep entries sorted by path, then by HTTP method.
     ```
 - **Error Responses**:
   - `401 UNAUTHORIZED` - not authenticated.
+  - `404 NOT_FOUND` - the action does not exist.
+
+### `PUT /api/todo/actions/{actionId}`
+
+- **Description**: Updates an action's title and description, optionally replacing its members. The action's members may edit it, and so may any user in the `ADMIN` department (who may edit any action). When `memberIds` is provided, the membership list is replaced entirely; when absent it is left unchanged. Every action member must belong to the owning project. Action members who are not already a leader or member of the owning task are added to it as task members. The action's `updatedDate` is bumped to the current time, and the owning task's `updatedDate` and the owning project's `updatedDate` are bumped to the current time as well.
+- **Authentication**: Authenticated session. The current user must be a member of the action, or a member of the `ADMIN` department.
+- **Request Body**: `UpdateActionRequest`:
+  - `title` (string, required) - the action title; must not be blank.
+  - `description` (string, optional) - the action description; may be `null` or empty to clear it.
+  - `memberIds` (array of integers, optional) - the user ids to assign as members; replaces the current member list when provided.
+- **Path Parameters**: `actionId` (integer) - the action's id.
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**:
+    ```json
+    {
+      "id": 1,
+      "taskId": 1,
+      "title": "Write the final report",
+      "description": "Draft and polish the report",
+      "createdDate": "2026-08-13T08:00:00.000Z",
+      "updatedDate": "2026-08-15T10:00:00.000Z",
+      "endDate": null,
+      "memberIds": [2]
+    }
+    ```
+- **Error Responses**:
+  - `400 BAD_REQUEST` - `title` missing or blank, a referenced user does not exist, or an assignee does not belong to the owning project.
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `403 FORBIDDEN` - the current user is not a member of the action.
+  - `404 NOT_FOUND` - the action does not exist.
+
+### `DELETE /api/todo/actions/{actionId}/finish`
+
+- **Description**: Reopens a finished action by clearing its `endDate`. The action's members may reopen it, and so may any user in the `ADMIN` department. The action's `updatedDate` is bumped to the current time, and the owning task's `updatedDate` and the owning project's `updatedDate` are bumped to the current time as well.
+- **Authentication**: Authenticated session. The current user must be a member of the action, or a member of the `ADMIN` department.
+- **Request Body**: -
+- **Path Parameters**: `actionId` (integer) - the action's id.
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**: the updated action with `endDate` set to `null`.
+- **Error Responses**:
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `403 FORBIDDEN` - the current user is not a member of the action.
+  - `404 NOT_FOUND` - the action does not exist.
+
+### `PUT /api/todo/actions/{actionId}/finish`
+
+- **Description**: Marks an action as finished by setting its `endDate` to the current time. The action's members may finish it, and so may any user in the `ADMIN` department. The action's `updatedDate` is bumped to the current time, and the owning task's `updatedDate` and the owning project's `updatedDate` are bumped to the current time as well.
+- **Authentication**: Authenticated session. The current user must be a member of the action, or a member of the `ADMIN` department.
+- **Request Body**: -
+- **Path Parameters**: `actionId` (integer) - the action's id.
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**: the updated action with `endDate` set to the finish time.
+- **Error Responses**:
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `403 FORBIDDEN` - the current user is not a member of the action.
   - `404 NOT_FOUND` - the action does not exist.
 
 ### `GET /api/todo/projects`

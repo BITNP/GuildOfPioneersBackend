@@ -2,6 +2,9 @@ package net.bitnp.guildofpioneers.todo;
 
 import net.bitnp.guildofpioneers.common.PermissionService;
 import net.bitnp.guildofpioneers.storage.FileStorageService;
+import net.bitnp.guildofpioneers.todo.entity.TodoAction;
+import net.bitnp.guildofpioneers.todo.entity.TodoActionMember;
+import net.bitnp.guildofpioneers.todo.entity.TodoActionMemberKey;
 import net.bitnp.guildofpioneers.todo.entity.TodoProject;
 import net.bitnp.guildofpioneers.todo.entity.TodoProjectLeader;
 import net.bitnp.guildofpioneers.todo.entity.TodoProjectLeaderKey;
@@ -12,8 +15,10 @@ import net.bitnp.guildofpioneers.todo.entity.TodoTaskLeader;
 import net.bitnp.guildofpioneers.todo.entity.TodoTaskLeaderKey;
 import net.bitnp.guildofpioneers.todo.entity.TodoTaskMember;
 import net.bitnp.guildofpioneers.todo.entity.TodoTaskMemberKey;
+import net.bitnp.guildofpioneers.todo.exception.InvalidActionRequestException;
 import net.bitnp.guildofpioneers.todo.exception.InvalidProjectRequestException;
 import net.bitnp.guildofpioneers.todo.exception.InvalidTaskRequestException;
+import net.bitnp.guildofpioneers.todo.exception.TodoActionNotFoundException;
 import net.bitnp.guildofpioneers.todo.exception.TodoProjectNotFoundException;
 import net.bitnp.guildofpioneers.todo.exception.TodoTaskNotFoundException;
 import net.bitnp.guildofpioneers.todo.repository.TodoActionMemberRepository;
@@ -598,7 +603,7 @@ class TodoServiceTest {
     }
 
     @Test
-    void createTask_byAdmin_canAssignUserNotInProject() {
+    void createTask_byAdmin_withUserNotInProject_throwsInvalidTaskRequest() {
         TodoProject project = TodoProject.builder()
                 .id(1L)
                 .title("Autumn Camp")
@@ -608,19 +613,6 @@ class TodoServiceTest {
         when(todoProjectRepository.findById(1L)).thenReturn(Optional.of(project));
         when(permissionService.currentUser(authentication)).thenReturn(user);
         when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
-        when(permissionService.isAdmin(user)).thenReturn(true);
-        when(userRepository.findAllById(anyList())).thenReturn(List.of(user, user));
-        TodoTask saved = TodoTask.builder()
-                .id(13L)
-                .projectId(1L)
-                .title("Prepare supplies")
-                .createdDate(Instant.parse("2026-08-15T08:00:00Z"))
-                .updatedDate(Instant.parse("2026-08-15T08:00:00Z"))
-                .build();
-        when(todoTaskRepository.save(any())).thenReturn(saved);
-        when(todoProjectRepository.save(any())).thenReturn(project);
-        when(todoTaskLeaderRepository.findById_TaskId(13L)).thenReturn(List.of(
-                TodoTaskLeader.builder().id(new TodoTaskLeaderKey(13L, 99L)).build()));
 
         CreateTaskRequest request = CreateTaskRequest.builder()
                 .projectId(1L)
@@ -629,11 +621,9 @@ class TodoServiceTest {
                 .memberIds(List.of())
                 .build();
 
-        TodoTaskUpdateResponse response = todoService.createTask(request, authentication);
-
-        assertThat(response.getLeaderIds()).containsExactly(99L);
-        verify(todoTaskLeaderRepository).save(argThat(leader -> leader.getId().getUserId() == 99L));
-        verify(todoTaskMemberRepository, never()).save(any());
+        assertThatThrownBy(() -> todoService.createTask(request, authentication))
+                .isInstanceOf(InvalidTaskRequestException.class);
+        verify(todoTaskRepository, never()).save(any());
     }
 
     @Test
@@ -841,5 +831,328 @@ class TodoServiceTest {
         assertThatThrownBy(() -> todoService.updateTask(999L, request, authentication))
                 .isInstanceOf(TodoTaskNotFoundException.class);
         verify(todoTaskRepository, never()).save(any());
+    }
+
+    private TodoProject todoProject(Long id) {
+        return TodoProject.builder()
+                .id(id)
+                .title("Autumn Camp")
+                .createdDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .updatedDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .build();
+    }
+
+    private TodoTask todoTask(Long id) {
+        return TodoTask.builder()
+                .id(id)
+                .projectId(1L)
+                .title("Prepare supplies")
+                .createdDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .updatedDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .build();
+    }
+
+    private TodoAction todoAction(Long id) {
+        return TodoAction.builder()
+                .id(id)
+                .taskId(1L)
+                .title("Write report")
+                .createdDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .updatedDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .build();
+    }
+
+    private void stubTouchHierarchy(TodoTask task) {
+        when(todoProjectRepository.findById(1L)).thenReturn(Optional.of(todoProject(1L)));
+        when(todoProjectRepository.save(any())).thenReturn(todoProject(1L));
+        when(todoTaskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+        when(todoTaskRepository.save(any())).thenReturn(task);
+    }
+
+    @Test
+    void createAction_byTaskMember_createsActionWithCreatorAsMember() {
+        TodoTask task = todoTask(1L);
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
+        when(todoProjectMemberRepository.existsById(any())).thenReturn(true);
+        TodoAction saved = TodoAction.builder()
+                .id(20L)
+                .taskId(1L)
+                .title("Draft outline")
+                .description("Outline the report")
+                .createdDate(Instant.parse("2026-08-15T08:00:00Z"))
+                .updatedDate(Instant.parse("2026-08-15T08:00:00Z"))
+                .build();
+        when(todoActionRepository.save(any())).thenReturn(saved);
+        stubTouchHierarchy(task);
+        when(todoActionMemberRepository.findById_ActionId(20L)).thenReturn(List.of(
+                TodoActionMember.builder().id(new TodoActionMemberKey(20L, 2L)).build(),
+                TodoActionMember.builder().id(new TodoActionMemberKey(20L, 1L)).build()));
+
+        CreateActionRequest request = CreateActionRequest.builder()
+                .taskId(1L)
+                .title("Draft outline")
+                .description("Outline the report")
+                .memberIds(List.of(2L))
+                .build();
+
+        TodoActionResponse response = todoService.createAction(request, authentication);
+
+        assertThat(response.getId()).isEqualTo(20L);
+        assertThat(response.getTaskId()).isEqualTo(1L);
+        assertThat(response.getTitle()).isEqualTo("Draft outline");
+        assertThat(response.getDescription()).isEqualTo("Outline the report");
+        assertThat(response.getMemberIds()).containsExactlyInAnyOrder(1L, 2L);
+        verify(todoActionMemberRepository).save(argThat(m -> m.getId().getUserId() == 1L));
+        verify(todoActionMemberRepository).save(argThat(m -> m.getId().getUserId() == 2L));
+        verify(todoTaskRepository).save(task);
+    }
+
+    @Test
+    void createAction_byNonTaskMember_throwsPermissionDenied() {
+        when(todoTaskRepository.findById(1L)).thenReturn(Optional.of(todoTask(1L)));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(false);
+
+        CreateActionRequest request = CreateActionRequest.builder()
+                .taskId(1L)
+                .title("Hijacked")
+                .build();
+
+        assertThatThrownBy(() -> todoService.createAction(request, authentication))
+                .isInstanceOf(PermissionDeniedException.class);
+        verify(todoActionRepository, never()).save(any());
+    }
+
+    @Test
+    void createAction_withUserNotInProject_throwsInvalidActionRequest() {
+        when(todoTaskRepository.findById(1L)).thenReturn(Optional.of(todoTask(1L)));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
+
+        CreateActionRequest request = CreateActionRequest.builder()
+                .taskId(1L)
+                .title("Prepare supplies")
+                .memberIds(List.of(99L))
+                .build();
+
+        assertThatThrownBy(() -> todoService.createAction(request, authentication))
+                .isInstanceOf(InvalidActionRequestException.class);
+        verify(todoActionRepository, never()).save(any());
+    }
+
+    @Test
+    void createAction_byAdmin_canAssignProjectMemberNotInTask() {
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
+        when(todoProjectMemberRepository.existsById(any())).thenReturn(true);
+        TodoAction saved = todoAction(20L);
+        when(todoActionRepository.save(any())).thenReturn(saved);
+        stubTouchHierarchy(todoTask(1L));
+        when(todoActionMemberRepository.findById_ActionId(20L)).thenReturn(List.of(
+                TodoActionMember.builder().id(new TodoActionMemberKey(20L, 99L)).build(),
+                TodoActionMember.builder().id(new TodoActionMemberKey(20L, 1L)).build()));
+
+        CreateActionRequest request = CreateActionRequest.builder()
+                .taskId(1L)
+                .title("Book venue")
+                .memberIds(List.of(99L))
+                .build();
+
+        TodoActionResponse response = todoService.createAction(request, authentication);
+
+        assertThat(response.getMemberIds()).containsExactlyInAnyOrder(1L, 99L);
+        verify(todoActionMemberRepository).save(argThat(m -> m.getId().getUserId() == 99L));
+    }
+
+    @Test
+    void createAction_byAdmin_withUserNotInProject_throwsInvalidActionRequest() {
+        when(todoTaskRepository.findById(1L)).thenReturn(Optional.of(todoTask(1L)));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
+
+        CreateActionRequest request = CreateActionRequest.builder()
+                .taskId(1L)
+                .title("Book venue")
+                .memberIds(List.of(99L))
+                .build();
+
+        assertThatThrownBy(() -> todoService.createAction(request, authentication))
+                .isInstanceOf(InvalidActionRequestException.class);
+        verify(todoActionRepository, never()).save(any());
+    }
+
+    @Test
+    void createAction_addsProjectMemberNotInTaskToTask() {
+        TodoTask task = todoTask(1L);
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
+        when(todoProjectMemberRepository.existsById(any())).thenReturn(true);
+        TodoAction saved = todoAction(20L);
+        when(todoActionRepository.save(any())).thenReturn(saved);
+        stubTouchHierarchy(task);
+        when(todoTaskLeaderRepository.findById_TaskId(1L)).thenReturn(List.of(
+                TodoTaskLeader.builder().id(new TodoTaskLeaderKey(1L, 1L)).build()));
+        when(todoTaskMemberRepository.findById_TaskId(1L)).thenReturn(List.of());
+        when(todoActionMemberRepository.findById_ActionId(20L)).thenReturn(List.of(
+                TodoActionMember.builder().id(new TodoActionMemberKey(20L, 1L)).build(),
+                TodoActionMember.builder().id(new TodoActionMemberKey(20L, 2L)).build()));
+
+        CreateActionRequest request = CreateActionRequest.builder()
+                .taskId(1L)
+                .title("Draft outline")
+                .memberIds(List.of(2L))
+                .build();
+
+        todoService.createAction(request, authentication);
+
+        verify(todoTaskMemberRepository).save(argThat(m -> m.getId().getTaskId() == 1L
+                && m.getId().getUserId() == 2L));
+        verify(todoTaskMemberRepository, never()).save(argThat(m -> m.getId().getUserId() == 1L));
+    }
+
+    @Test
+    void createAction_missingTask_throwsNotFound() {
+        when(todoTaskRepository.findById(999L)).thenReturn(Optional.empty());
+
+        CreateActionRequest request = CreateActionRequest.builder()
+                .taskId(999L)
+                .title("Prepare supplies")
+                .build();
+
+        assertThatThrownBy(() -> todoService.createAction(request, authentication))
+                .isInstanceOf(TodoTaskNotFoundException.class);
+        verify(todoActionRepository, never()).save(any());
+    }
+
+    @Test
+    void updateAction_byActionMember_replacesMembers() {
+        TodoAction action = todoAction(1L);
+        when(todoActionRepository.findById(1L)).thenReturn(Optional.of(action));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
+        when(todoProjectMemberRepository.existsById(any())).thenReturn(true);
+        List<TodoActionMember> oldMembers = List.of(
+                TodoActionMember.builder().id(new TodoActionMemberKey(1L, 1L)).build());
+        List<TodoActionMember> newMembers = List.of(
+                TodoActionMember.builder().id(new TodoActionMemberKey(1L, 2L)).build());
+        when(todoActionMemberRepository.findById_ActionId(1L)).thenReturn(oldMembers, newMembers);
+        when(todoActionRepository.save(any())).thenReturn(action);
+        stubTouchHierarchy(todoTask(1L));
+
+        UpdateActionRequest request = UpdateActionRequest.builder()
+                .title("Write the final report")
+                .memberIds(List.of(2L))
+                .build();
+
+        TodoActionResponse response = todoService.updateAction(1L, request, authentication);
+
+        assertThat(response.getTitle()).isEqualTo("Write the final report");
+        assertThat(response.getMemberIds()).containsExactly(2L);
+        verify(todoActionMemberRepository).deleteAll(oldMembers);
+        verify(todoActionMemberRepository).save(argThat(m -> m.getId().getUserId() == 2L));
+        verify(todoActionRepository).save(action);
+    }
+
+    @Test
+    void updateAction_withUserNotInProject_throwsInvalidActionRequest() {
+        when(todoActionRepository.findById(1L)).thenReturn(Optional.of(todoAction(1L)));
+        when(todoTaskRepository.findById(1L)).thenReturn(Optional.of(todoTask(1L)));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
+
+        UpdateActionRequest request = UpdateActionRequest.builder()
+                .title("Write report")
+                .memberIds(List.of(99L))
+                .build();
+
+        assertThatThrownBy(() -> todoService.updateAction(1L, request, authentication))
+                .isInstanceOf(InvalidActionRequestException.class);
+        verify(todoActionRepository, never()).save(any());
+    }
+
+    @Test
+    void updateAction_byNonActionMember_throwsPermissionDenied() {
+        when(todoActionRepository.findById(1L)).thenReturn(Optional.of(todoAction(1L)));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(false);
+
+        UpdateActionRequest request = UpdateActionRequest.builder()
+                .title("Hijacked")
+                .build();
+
+        assertThatThrownBy(() -> todoService.updateAction(1L, request, authentication))
+                .isInstanceOf(PermissionDeniedException.class);
+        verify(todoActionRepository, never()).save(any());
+    }
+
+    @Test
+    void updateAction_missingAction_throwsNotFound() {
+        when(todoActionRepository.findById(999L)).thenReturn(Optional.empty());
+
+        UpdateActionRequest request = UpdateActionRequest.builder()
+                .title("Write report")
+                .build();
+
+        assertThatThrownBy(() -> todoService.updateAction(999L, request, authentication))
+                .isInstanceOf(TodoActionNotFoundException.class);
+        verify(todoActionRepository, never()).save(any());
+    }
+
+    @Test
+    void finishAction_setsEndDateAndPropagates() {
+        TodoAction action = todoAction(1L);
+        when(todoActionRepository.findById(1L)).thenReturn(Optional.of(action));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
+        when(todoActionRepository.save(any())).thenReturn(action);
+        stubTouchHierarchy(todoTask(1L));
+        when(todoActionMemberRepository.findById_ActionId(1L)).thenReturn(List.of());
+
+        TodoActionResponse response = todoService.finishAction(1L, authentication);
+
+        assertThat(response.getEndDate()).isNotNull();
+        verify(todoActionRepository).save(action);
+    }
+
+    @Test
+    void finishAction_byNonActionMember_throwsPermissionDenied() {
+        when(todoActionRepository.findById(1L)).thenReturn(Optional.of(todoAction(1L)));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(false);
+
+        assertThatThrownBy(() -> todoService.finishAction(1L, authentication))
+                .isInstanceOf(PermissionDeniedException.class);
+        verify(todoActionRepository, never()).save(any());
+    }
+
+    @Test
+    void unfinishAction_clearsEndDate() {
+        TodoAction action = todoAction(1L);
+        action.setEndDate(Instant.parse("2026-08-14T08:00:00Z"));
+        when(todoActionRepository.findById(1L)).thenReturn(Optional.of(action));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(true);
+        when(todoActionRepository.save(any())).thenReturn(action);
+        stubTouchHierarchy(todoTask(1L));
+        when(todoActionMemberRepository.findById_ActionId(1L)).thenReturn(List.of());
+
+        TodoActionResponse response = todoService.unfinishAction(1L, authentication);
+
+        assertThat(response.getEndDate()).isNull();
+        verify(todoActionRepository).save(action);
+    }
+
+    @Test
+    void unfinishAction_byNonActionMember_throwsPermissionDenied() {
+        TodoAction action = todoAction(1L);
+        action.setEndDate(Instant.parse("2026-08-14T08:00:00Z"));
+        when(todoActionRepository.findById(1L)).thenReturn(Optional.of(action));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
+        when(permissionService.isAdminOr(eq(user), any())).thenReturn(false);
+
+        assertThatThrownBy(() -> todoService.unfinishAction(1L, authentication))
+                .isInstanceOf(PermissionDeniedException.class);
+        verify(todoActionRepository, never()).save(any());
     }
 }

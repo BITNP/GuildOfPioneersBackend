@@ -42,10 +42,12 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import java.time.Instant;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.startsWith;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -817,7 +819,7 @@ class TodoControllerIntegrationTest {
     }
 
     @Test
-    void createTask_byAdmin_canAssignUserNotInProject() throws Exception {
+    void createTask_byAdmin_withUserNotInProject_returnsBadRequest() throws Exception {
         User admin = userRepository.save(User.builder()
                 .userName("Admin")
                 .phone("13000000002")
@@ -848,11 +850,7 @@ class TodoControllerIntegrationTest {
                                   "memberIds": []
                                 }
                                 """.formatted(project.getId(), outsider.getId())))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.leaderIds", hasSize(2)))
-                .andExpect(jsonPath("$.leaderIds", hasItems(
-                        admin.getId().intValue(), outsider.getId().intValue())))
-                .andExpect(jsonPath("$.memberIds").isEmpty());
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -985,6 +983,426 @@ class TodoControllerIntegrationTest {
                                 }
                                 """))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void createAction_byTaskMember_returnsCreatedActionWithCreatorAsMember() throws Exception {
+        MockHttpSession memberSession = login(member);
+
+        mockMvc.perform(post("/api/todo/actions")
+                        .session(memberSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "taskId": %d,
+                                  "title": "Draft outline",
+                                  "description": "Outline the report",
+                                  "memberIds": [%d]
+                                }
+                                """.formatted(task.getId(), leader.getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").isNumber())
+                .andExpect(jsonPath("$.taskId").value(task.getId().intValue()))
+                .andExpect(jsonPath("$.title").value("Draft outline"))
+                .andExpect(jsonPath("$.description").value("Outline the report"))
+                .andExpect(jsonPath("$.endDate").value(nullValue()))
+                .andExpect(jsonPath("$.memberIds", hasSize(2)))
+                .andExpect(jsonPath("$.memberIds", hasItems(
+                        member.getId().intValue(), leader.getId().intValue())))
+                .andExpect(jsonPath("$.leaderIds").doesNotExist());
+    }
+
+    @Test
+    void createAction_byNonTaskMember_returnsForbidden() throws Exception {
+        User outsider = userRepository.save(User.builder()
+                .userName("Carol")
+                .phone("13000000004")
+                .email("carol@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+        MockHttpSession outsiderSession = login(outsider);
+
+        mockMvc.perform(post("/api/todo/actions")
+                        .session(outsiderSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "taskId": %d,
+                                  "title": "Hijacked",
+                                  "memberIds": []
+                                }
+                                """.formatted(task.getId())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void createAction_missingTask_returnsNotFound() throws Exception {
+        mockMvc.perform(post("/api/todo/actions")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "taskId": 9999,
+                                  "title": "Prepare supplies",
+                                  "memberIds": []
+                                }
+                                """))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void createAction_withBlankTitle_returnsBadRequest() throws Exception {
+        mockMvc.perform(post("/api/todo/actions")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "taskId": %d,
+                                  "title": "   ",
+                                  "memberIds": []
+                                }
+                                """.formatted(task.getId())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createAction_withUserNotInProject_returnsBadRequest() throws Exception {
+        User outsider = userRepository.save(User.builder()
+                .userName("Carol")
+                .phone("13000000004")
+                .email("carol@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+
+        mockMvc.perform(post("/api/todo/actions")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "taskId": %d,
+                                  "title": "Prepare supplies",
+                                  "memberIds": [%d]
+                                }
+                                """.formatted(task.getId(), outsider.getId())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createAction_byTaskMember_addsNewMemberToTask() throws Exception {
+        User carol = userRepository.save(User.builder()
+                .userName("Carol")
+                .phone("13000000004")
+                .email("carol@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+        projectMemberRepository.save(TodoProjectMember.builder()
+                .id(new TodoProjectMemberKey(project.getId(), carol.getId()))
+                .build());
+
+        mockMvc.perform(post("/api/todo/actions")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "taskId": %d,
+                                  "title": "Draft outline",
+                                  "memberIds": [%d]
+                                }
+                                """.formatted(task.getId(), carol.getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.memberIds", hasItems(
+                        leader.getId().intValue(), carol.getId().intValue())));
+
+        assertThat(taskMemberRepository.existsById(new TodoTaskMemberKey(task.getId(), carol.getId())))
+                .isTrue();
+    }
+
+    @Test
+    void createAction_byAdmin_canAssignProjectMemberNotInTask() throws Exception {
+        User admin = userRepository.save(User.builder()
+                .userName("Admin")
+                .phone("13000000002")
+                .email("admin@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+        userDepartmentRepository.save(UserDepartment.builder()
+                .userId(admin.getId())
+                .department(Department.ADMIN)
+                .role(DepartmentRole.LEADER)
+                .build());
+        User carol = userRepository.save(User.builder()
+                .userName("Carol")
+                .phone("13000000004")
+                .email("carol@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+        projectMemberRepository.save(TodoProjectMember.builder()
+                .id(new TodoProjectMemberKey(project.getId(), carol.getId()))
+                .build());
+        MockHttpSession adminSession = login(admin);
+
+        mockMvc.perform(post("/api/todo/actions")
+                        .session(adminSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "taskId": %d,
+                                  "title": "Book venue",
+                                  "memberIds": [%d]
+                                }
+                                """.formatted(task.getId(), carol.getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.memberIds", hasSize(1)))
+                .andExpect(jsonPath("$.memberIds[0]").value(carol.getId().intValue()));
+
+        assertThat(taskMemberRepository.existsById(new TodoTaskMemberKey(task.getId(), carol.getId())))
+                .isTrue();
+    }
+
+    @Test
+    void createAction_byAdmin_withUserNotInProject_returnsBadRequest() throws Exception {
+        User admin = userRepository.save(User.builder()
+                .userName("Admin")
+                .phone("13000000002")
+                .email("admin@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+        userDepartmentRepository.save(UserDepartment.builder()
+                .userId(admin.getId())
+                .department(Department.ADMIN)
+                .role(DepartmentRole.LEADER)
+                .build());
+        User outsider = userRepository.save(User.builder()
+                .userName("Carol")
+                .phone("13000000004")
+                .email("carol@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+        MockHttpSession adminSession = login(admin);
+
+        mockMvc.perform(post("/api/todo/actions")
+                        .session(adminSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "taskId": %d,
+                                  "title": "Book venue",
+                                  "memberIds": [%d]
+                                }
+                                """.formatted(task.getId(), outsider.getId())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createAction_unauthenticatedRequest_isRejected() throws Exception {
+        mockMvc.perform(post("/api/todo/actions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "taskId": %d,
+                                  "title": "Prepare supplies",
+                                  "memberIds": []
+                                }
+                                """.formatted(task.getId())))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void updateAction_byActionMember_returnsUpdatedAction() throws Exception {
+        MockHttpSession memberSession = login(member);
+
+        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId())
+                        .session(memberSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Write the final report",
+                                  "description": "Draft and polish the report"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(action.getId().intValue()))
+                .andExpect(jsonPath("$.taskId").value(task.getId().intValue()))
+                .andExpect(jsonPath("$.title").value("Write the final report"))
+                .andExpect(jsonPath("$.description").value("Draft and polish the report"))
+                .andExpect(jsonPath("$.memberIds[0]").value(member.getId().intValue()))
+                .andExpect(jsonPath("$.leaders").doesNotExist())
+                .andExpect(jsonPath("$.members").doesNotExist());
+    }
+
+    @Test
+    void updateAction_replacesMembers() throws Exception {
+        MockHttpSession memberSession = login(member);
+
+        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId())
+                        .session(memberSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Write report",
+                                  "memberIds": [%d]
+                                }
+                                """.formatted(leader.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.memberIds[0]").value(leader.getId().intValue()))
+                .andExpect(jsonPath("$.memberIds", hasSize(1)));
+    }
+
+    @Test
+    void updateAction_byNonActionMember_returnsForbidden() throws Exception {
+        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId())
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Hijacked",
+                                  "memberIds": []
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void updateAction_withUserNotInProject_returnsBadRequest() throws Exception {
+        User outsider = userRepository.save(User.builder()
+                .userName("Carol")
+                .phone("13000000004")
+                .email("carol@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+        MockHttpSession memberSession = login(member);
+
+        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId())
+                        .session(memberSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Write report",
+                                  "memberIds": [%d]
+                                }
+                                """.formatted(outsider.getId())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateAction_byActionMember_addsNewMemberToTask() throws Exception {
+        User carol = userRepository.save(User.builder()
+                .userName("Carol")
+                .phone("13000000004")
+                .email("carol@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+        projectMemberRepository.save(TodoProjectMember.builder()
+                .id(new TodoProjectMemberKey(project.getId(), carol.getId()))
+                .build());
+        MockHttpSession memberSession = login(member);
+
+        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId())
+                        .session(memberSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Write report",
+                                  "memberIds": [%d]
+                                }
+                                """.formatted(carol.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.memberIds[0]").value(carol.getId().intValue()));
+
+        assertThat(taskMemberRepository.existsById(new TodoTaskMemberKey(task.getId(), carol.getId())))
+                .isTrue();
+    }
+
+    @Test
+    void updateAction_missingAction_returnsNotFound() throws Exception {
+        mockMvc.perform(put("/api/todo/actions/{actionId}", 9999L)
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Write report",
+                                  "memberIds": []
+                                }
+                                """))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void updateAction_unauthenticatedRequest_isRejected() throws Exception {
+        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Write report",
+                                  "memberIds": []
+                                }
+                                """))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void finishAction_setsEndDate() throws Exception {
+        MockHttpSession memberSession = login(member);
+
+        mockMvc.perform(put("/api/todo/actions/{actionId}/finish", action.getId())
+                        .session(memberSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(action.getId().intValue()))
+                .andExpect(jsonPath("$.endDate").exists());
+    }
+
+    @Test
+    void finishAction_byNonActionMember_returnsForbidden() throws Exception {
+        mockMvc.perform(put("/api/todo/actions/{actionId}/finish", action.getId())
+                        .session(session))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void finishAction_unauthenticatedRequest_isRejected() throws Exception {
+        mockMvc.perform(put("/api/todo/actions/{actionId}/finish", action.getId()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void unfinishAction_clearsEndDate() throws Exception {
+        TodoAction finished = actionRepository.save(TodoAction.builder()
+                .taskId(task.getId())
+                .title("Write report")
+                .description("Draft the final report")
+                .createdDate(CREATED)
+                .updatedDate(CREATED)
+                .endDate(CREATED.plusSeconds(3600))
+                .build());
+        actionMemberRepository.save(TodoActionMember.builder()
+                .id(new TodoActionMemberKey(finished.getId(), member.getId()))
+                .build());
+        MockHttpSession memberSession = login(member);
+
+        mockMvc.perform(delete("/api/todo/actions/{actionId}/finish", finished.getId())
+                        .session(memberSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(finished.getId().intValue()))
+                .andExpect(jsonPath("$.endDate").value(nullValue()));
+    }
+
+    @Test
+    void unfinishAction_byNonActionMember_returnsForbidden() throws Exception {
+        TodoAction finished = actionRepository.save(TodoAction.builder()
+                .taskId(task.getId())
+                .title("Write report")
+                .description("Draft the final report")
+                .createdDate(CREATED)
+                .updatedDate(CREATED)
+                .endDate(CREATED.plusSeconds(3600))
+                .build());
+        actionMemberRepository.save(TodoActionMember.builder()
+                .id(new TodoActionMemberKey(finished.getId(), member.getId()))
+                .build());
+
+        mockMvc.perform(delete("/api/todo/actions/{actionId}/finish", finished.getId())
+                        .session(session))
+                .andExpect(status().isForbidden());
     }
 
     private MockHttpSession createManagerSession(String username, String phone) throws Exception {
