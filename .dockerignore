@@ -1,0 +1,12 @@
+.gradle
+build
+uploads
+.git
+.idea
+*.iml
+HELP.md
+README.md
+TODO.md
+doc
+.opencode
+.dockerignore

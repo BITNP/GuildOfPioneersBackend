@@ -47,8 +47,8 @@ public class SecurityConfig {
     }
 
     /**
-     * Builds the security filter chain, permitting login, registration, and static uploads
-     * while requiring authentication for all other requests.
+     * Builds the security filter chain, permitting login, registration, static uploads, and
+     * the actuator health endpoint while requiring authentication for all other requests.
      *
      * @param http         the HTTP security builder
      * @param objectMapper the Jackson mapper used for the unauthorized entry point body
@@ -72,7 +72,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/login", "/api/auth/register", "/uploads/**").permitAll()
+                        .requestMatchers("/api/auth/login", "/api/auth/register", "/uploads/**", "/actuator/health").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(unauthorizedEntryPoint))
                 .logout(logout -> logout
