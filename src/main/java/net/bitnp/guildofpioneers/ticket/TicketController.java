@@ -28,6 +28,6 @@ public class TicketController {
             @Valid @RequestBody CreateRegistrationTicketRequest request,
             Authentication authentication
     ) {
-        return registrationTicketService.create(request, authentication.getName());
+        return registrationTicketService.create(request, authentication);
     }
 }

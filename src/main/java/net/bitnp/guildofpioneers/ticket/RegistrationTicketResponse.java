@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import net.bitnp.guildofpioneers.user.entity.Department;
+import net.bitnp.guildofpioneers.user.entity.DepartmentRole;
 
 import java.time.Instant;
 
@@ -23,4 +25,6 @@ public class RegistrationTicketResponse {
     private Instant createdAt;
     private Instant expiresAt;
     private Long createdBy;
+    private Department department;
+    private DepartmentRole role;
 }

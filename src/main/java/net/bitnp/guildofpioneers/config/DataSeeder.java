@@ -265,6 +265,8 @@ public class DataSeeder implements ApplicationRunner {
                     .createdAt(Instant.now())
                     .expiresAt(Instant.now().plus(TICKET_VALIDITY_DAYS, ChronoUnit.DAYS))
                     .createdBy(creator.getId())
+                    .department(DEPARTMENTS[random.nextInt(DEPARTMENTS.length)])
+                    .role(ROLES[random.nextInt(ROLES.length)])
                     .build());
         }
     }

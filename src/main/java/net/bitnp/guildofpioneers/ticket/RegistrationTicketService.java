@@ -1,9 +1,11 @@
 package net.bitnp.guildofpioneers.ticket;
 
-import net.bitnp.guildofpioneers.user.entity.User;
-import net.bitnp.guildofpioneers.user.exception.UserNotFoundException;
-import net.bitnp.guildofpioneers.user.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
+import net.bitnp.guildofpioneers.common.PermissionService;
+import net.bitnp.guildofpioneers.user.entity.Department;
+import net.bitnp.guildofpioneers.user.entity.User;
+import net.bitnp.guildofpioneers.user.exception.PermissionDeniedException;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,34 +24,42 @@ public class RegistrationTicketService {
     private static final int CODE_GENERATION_ATTEMPTS = 5;
 
     private final RegistrationTicketRepository registrationTicketRepository;
-    private final UserRepository userRepository;
+    private final PermissionService permissionService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public RegistrationTicketService(
             RegistrationTicketRepository registrationTicketRepository,
-            UserRepository userRepository
+            PermissionService permissionService
     ) {
         this.registrationTicketRepository = registrationTicketRepository;
-        this.userRepository = userRepository;
+        this.permissionService = permissionService;
     }
 
     /**
      * Creates a new registration ticket for the given creator.
      *
-     * @param request      the ticket creation data
-     * @param creatorPhone the phone number of the user creating the ticket
+     * @param request        the ticket creation data
+     * @param authentication the current authentication
      * @return the created ticket
-     * @throws UserNotFoundException if the creator does not exist
+     * @throws PermissionDeniedException     if the current user is not an admin or presidium member
+     * @throws InvalidTicketRequestException if the requested department is the ADMIN department
      */
     @Transactional
-    public RegistrationTicketResponse create(CreateRegistrationTicketRequest request, String creatorPhone) {
-        User creator = userRepository.findByPhone(creatorPhone)
-                .orElseThrow(() -> new UserNotFoundException(creatorPhone));
+    public RegistrationTicketResponse create(CreateRegistrationTicketRequest request, Authentication authentication) {
+        User creator = permissionService.currentUser(authentication);
+        if (!permissionService.isAdminOrPresidium(creator)) {
+            throw new PermissionDeniedException("Only admins or presidium members can create registration tickets");
+        }
+        if (request.getDepartment() == Department.ADMIN) {
+            throw new InvalidTicketRequestException("Registration tickets cannot be issued for the ADMIN department");
+        }
         RegistrationTicket ticket = RegistrationTicket.builder()
                 .code(generateUniqueCode())
                 .createdAt(Instant.now())
                 .expiresAt(request.getExpiresAt())
                 .createdBy(creator.getId())
+                .department(request.getDepartment())
+                .role(request.getRole())
                 .build();
         RegistrationTicket saved = registrationTicketRepository.save(ticket);
         log.trace("Registration ticket {} created by user {}", saved.getId(), saved.getCreatedBy());
@@ -97,6 +107,8 @@ public class RegistrationTicketService {
                 .createdAt(ticket.getCreatedAt())
                 .expiresAt(ticket.getExpiresAt())
                 .createdBy(ticket.getCreatedBy())
+                .department(ticket.getDepartment())
+                .role(ticket.getRole())
                 .build();
     }
 }

@@ -63,10 +63,12 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `POST /api/admin/tickets`
 
-- **Description**: Creates a registration ticket. The generated code is valid until `expiresAt`. Admin/staff authorization is not yet enforced; any authenticated user can create tickets for now.
-- **Authentication**: Authenticated session. The current user is recorded as the ticket creator.
+- **Description**: Creates a registration ticket. The generated code is valid until `expiresAt`. The ticket records the department and role the new user is invited into. Only users in the `ADMIN` or `PRESIDIUM` departments may create tickets, and tickets cannot be issued for the `ADMIN` department.
+- **Authentication**: Authenticated session. The current user must be a member of the `ADMIN` or `PRESIDIUM` department, and is recorded as the ticket creator.
 - **Request Body**: `CreateRegistrationTicketRequest`:
   - `expiresAt` (string, required) - ISO-8601 instant when the ticket expires; must be in the future.
+  - `department` (string, required) - the department the new user is invited into; one of `CLINIC`, `TECH`, `SUPPORT`, `MEDIA`, `PRESIDIUM`.
+  - `role` (string, required) - the role the new user is invited into; one of `LEADER`, `VICE`, `ADVISOR`, `MEMBER`.
 - **Path Parameters**: -
 - **Query Parameters**: -
 - **Success Response**:
@@ -78,12 +80,15 @@ Keep entries sorted by path, then by HTTP method.
       "code": "K7M2P9Q4R6TW",
       "createdAt": "2026-08-03T04:00:00.000Z",
       "expiresAt": "2026-09-03T04:00:00.000Z",
-      "createdBy": 1
+      "createdBy": 1,
+      "department": "TECH",
+      "role": "MEMBER"
     }
     ```
 - **Error Responses**:
-  - `400 BAD_REQUEST` - `expiresAt` missing or not in the future.
+  - `400 BAD_REQUEST` - `expiresAt` missing or not in the future, `department` or `role` missing, or `department` is `ADMIN`.
   - `401 UNAUTHORIZED` - not authenticated.
+  - `403 FORBIDDEN` - the current user is not a member of the `ADMIN` or `PRESIDIUM` department.
 
 ### `POST /api/auth/register`
 

@@ -86,6 +86,17 @@ public class PermissionService {
     }
 
     /**
+     * Returns whether the user is an admin or a member of the PRESIDIUM
+     * department. These users may create registration tickets.
+     *
+     * @param user the user to check
+     * @return true if the user is an admin or a presidium member
+     */
+    public boolean isAdminOrPresidium(User user) {
+        return isAdmin(user) || isInDepartment(user, Department.PRESIDIUM);
+    }
+
+    /**
      * Returns true when the user is an admin, or when the module-specific
      * requirement passes. The module supplies its own check, so this service
      * stays free of module knowledge while giving admins an override.

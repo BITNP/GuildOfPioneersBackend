@@ -90,4 +90,28 @@ class PermissionServiceTest {
         stubDepartments(List.of());
         assertThat(permissionService.isManager(user)).isFalse();
     }
+
+    @Test
+    void isAdminOrPresidium_returnsTrueForAdminDepartmentMember() {
+        stubDepartments(List.of(department(Department.ADMIN, DepartmentRole.MEMBER)));
+        assertThat(permissionService.isAdminOrPresidium(user)).isTrue();
+    }
+
+    @Test
+    void isAdminOrPresidium_returnsTrueForPresidiumMember() {
+        stubDepartments(List.of(department(Department.PRESIDIUM, DepartmentRole.MEMBER)));
+        assertThat(permissionService.isAdminOrPresidium(user)).isTrue();
+    }
+
+    @Test
+    void isAdminOrPresidium_returnsFalseForOtherDepartmentMember() {
+        stubDepartments(List.of(department(Department.TECH, DepartmentRole.LEADER)));
+        assertThat(permissionService.isAdminOrPresidium(user)).isFalse();
+    }
+
+    @Test
+    void isAdminOrPresidium_returnsFalseForUserWithoutDepartments() {
+        stubDepartments(List.of());
+        assertThat(permissionService.isAdminOrPresidium(user)).isFalse();
+    }
 }
