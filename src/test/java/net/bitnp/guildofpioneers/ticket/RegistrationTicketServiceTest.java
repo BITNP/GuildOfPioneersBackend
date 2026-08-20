@@ -142,4 +142,49 @@ class RegistrationTicketServiceTest {
         assertThatThrownBy(() -> registrationTicketService.validate("EXPIRED123"))
                 .isInstanceOf(TicketExpiredException.class);
     }
+
+    @Test
+    void validateTicket_reportsValidTicket() {
+        RegistrationTicket ticket = RegistrationTicket.builder()
+                .code("VALIDCODE123")
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .department(Department.TECH)
+                .role(DepartmentRole.LEADER)
+                .build();
+        when(registrationTicketRepository.findByCode("VALIDCODE123")).thenReturn(Optional.of(ticket));
+
+        TicketValidationResponse response = registrationTicketService.validateTicket("VALIDCODE123");
+
+        assertThat(response.isValid()).isTrue();
+        assertThat(response.isExpired()).isFalse();
+        assertThat(response.getDepartment()).isEqualTo(Department.TECH);
+        assertThat(response.getRole()).isEqualTo(DepartmentRole.LEADER);
+        assertThat(response.getExpiresAt()).isEqualTo(ticket.getExpiresAt());
+    }
+
+    @Test
+    void validateTicket_reportsExpiredTicketWithInvitedDepartmentAndRole() {
+        RegistrationTicket ticket = RegistrationTicket.builder()
+                .code("EXPIRED123")
+                .expiresAt(Instant.now().minusSeconds(60))
+                .department(Department.MEDIA)
+                .role(DepartmentRole.MEMBER)
+                .build();
+        when(registrationTicketRepository.findByCode("EXPIRED123")).thenReturn(Optional.of(ticket));
+
+        TicketValidationResponse response = registrationTicketService.validateTicket("EXPIRED123");
+
+        assertThat(response.isValid()).isFalse();
+        assertThat(response.isExpired()).isTrue();
+        assertThat(response.getDepartment()).isEqualTo(Department.MEDIA);
+        assertThat(response.getRole()).isEqualTo(DepartmentRole.MEMBER);
+    }
+
+    @Test
+    void validateTicket_throwsWhenTicketNotFound() {
+        when(registrationTicketRepository.findByCode("MISSING")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> registrationTicketService.validateTicket("MISSING"))
+                .isInstanceOf(TicketCodeNotFoundException.class);
+    }
 }

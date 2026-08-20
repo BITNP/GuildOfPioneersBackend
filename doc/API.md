@@ -260,6 +260,28 @@ Keep entries sorted by path, then by HTTP method.
   - `401 UNAUTHORIZED` - not authenticated.
   - `413 CONTENT_TOO_LARGE` - file exceeds the maximum allowed size.
 
+### `GET /api/tickets/{code}`
+
+- **Description**: Looks up a registration ticket by its code and reports whether it is valid or expired, along with the department and role the holder is invited into. An expired ticket still returns the invited department and role so the client can show what was offered.
+- **Authentication**: None.
+- **Request Body**: -
+- **Path Parameters**: `code` (string) - the registration ticket code.
+- **Query Parameters**: -
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**:
+    ```json
+    {
+      "valid": true,
+      "expired": false,
+      "department": "TECH",
+      "role": "MEMBER",
+      "expiresAt": "2026-09-03T04:00:00.000Z"
+    }
+    ```
+- **Error Responses**:
+  - `404 NOT_FOUND` - no ticket with the given code exists.
+
 ### `GET /api/todo/actions?taskId={taskId}`
 
 - **Description**: Lists the actions of a task, most recently updated first.

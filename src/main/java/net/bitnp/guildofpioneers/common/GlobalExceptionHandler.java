@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.bitnp.guildofpioneers.storage.InvalidFileTypeException;
 import net.bitnp.guildofpioneers.storage.StoredFileNotFoundException;
 import net.bitnp.guildofpioneers.ticket.InvalidTicketRequestException;
+import net.bitnp.guildofpioneers.ticket.TicketCodeNotFoundException;
 import net.bitnp.guildofpioneers.ticket.TicketExpiredException;
 import net.bitnp.guildofpioneers.ticket.TicketNotFoundException;
 import net.bitnp.guildofpioneers.todo.exception.InvalidActionRequestException;
@@ -53,6 +54,13 @@ public class GlobalExceptionHandler {
     ) {
         log.trace("Invalid registration ticket: {}", ex.getMessage());
         return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(TicketCodeNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleTicketCodeNotFound(
+            TicketCodeNotFoundException ex, HttpServletRequest request
+    ) {
+        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request);
     }
 
     @ExceptionHandler(InvalidTicketRequestException.class)

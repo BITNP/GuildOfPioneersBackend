@@ -72,7 +72,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/login", "/api/auth/register", "/uploads/**", "/actuator/health").permitAll()
+                        .requestMatchers("/api/auth/login", "/api/auth/register", "/api/tickets/**", "/uploads/**", "/actuator/health").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(unauthorizedEntryPoint))
                 .logout(logout -> logout

@@ -82,6 +82,28 @@ public class RegistrationTicketService {
         }
     }
 
+    /**
+     * Looks up a ticket by code and reports whether it is still valid, along with
+     * the department and role the holder is invited into.
+     *
+     * @param code the ticket code to look up
+     * @return the validity status, expiration state, and invited department/role
+     * @throws TicketCodeNotFoundException if no ticket with the code exists
+     */
+    @Transactional(readOnly = true)
+    public TicketValidationResponse validateTicket(String code) {
+        RegistrationTicket ticket = registrationTicketRepository.findByCode(code)
+                .orElseThrow(() -> new TicketCodeNotFoundException(code));
+        boolean expired = ticket.getExpiresAt().isBefore(Instant.now());
+        return TicketValidationResponse.builder()
+                .valid(!expired)
+                .expired(expired)
+                .department(ticket.getDepartment())
+                .role(ticket.getRole())
+                .expiresAt(ticket.getExpiresAt())
+                .build();
+    }
+
     private String generateUniqueCode() {
         for (int attempt = 0; attempt < CODE_GENERATION_ATTEMPTS; attempt++) {
             String code = generateCode();
