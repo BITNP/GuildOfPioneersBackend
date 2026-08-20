@@ -5,13 +5,13 @@ services:
     environment:
       POSTGRES_DB: guild
       POSTGRES_USER: guild
-      POSTGRES_PASSWORD: guild
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U guild -d guild"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-guild} -d ${POSTGRES_DB:-guild}" ]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -27,19 +27,19 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      DB_URL: jdbc:postgresql://postgres:5432/guild
-      DB_USERNAME: guild
-      DB_PASSWORD: guild
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-guild}
+      DB_USERNAME: ${POSTGRES_USER:-guild}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
       VEIL_DB_TYPE: POSTGRES
       APP_TIMEZONE: UTC+8
       APP_SEED_DATA: "false"
-      APP_ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      APP_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - uploads_data:/app/uploads
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8080/actuator/health" ]
       interval: 10s
       timeout: 5s
       retries: 5
