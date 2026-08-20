@@ -187,4 +187,29 @@ class RegistrationTicketServiceTest {
         assertThatThrownBy(() -> registrationTicketService.validateTicket("MISSING"))
                 .isInstanceOf(TicketCodeNotFoundException.class);
     }
+
+    @Test
+    void findByCode_returnsTicket() {
+        RegistrationTicket ticket = RegistrationTicket.builder()
+                .code("VALIDCODE123")
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .department(Department.CLINIC)
+                .role(DepartmentRole.LEADER)
+                .build();
+        when(registrationTicketRepository.findByCode("VALIDCODE123")).thenReturn(Optional.of(ticket));
+
+        RegistrationTicket result = registrationTicketService.findByCode("VALIDCODE123");
+
+        assertThat(result).isEqualTo(ticket);
+        assertThat(result.getDepartment()).isEqualTo(Department.CLINIC);
+        assertThat(result.getRole()).isEqualTo(DepartmentRole.LEADER);
+    }
+
+    @Test
+    void findByCode_throwsWhenTicketNotFound() {
+        when(registrationTicketRepository.findByCode("MISSING")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> registrationTicketService.findByCode("MISSING"))
+                .isInstanceOf(TicketNotFoundException.class);
+    }
 }

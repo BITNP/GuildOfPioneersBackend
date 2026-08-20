@@ -104,6 +104,21 @@ public class RegistrationTicketService {
                 .build();
     }
 
+    /**
+     * Returns the ticket with the given code so callers can read the department
+     * and role the holder is invited into. The caller is expected to have
+     * validated the ticket first.
+     *
+     * @param code the ticket code to look up
+     * @return the matching ticket
+     * @throws TicketNotFoundException if no ticket with the code exists
+     */
+    @Transactional(readOnly = true)
+    public RegistrationTicket findByCode(String code) {
+        return registrationTicketRepository.findByCode(code)
+                .orElseThrow(() -> new TicketNotFoundException(code));
+    }
+
     private String generateUniqueCode() {
         for (int attempt = 0; attempt < CODE_GENERATION_ATTEMPTS; attempt++) {
             String code = generateCode();

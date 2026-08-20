@@ -92,7 +92,7 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `POST /api/auth/register`
 
-- **Description**: Registers a new user. A valid, non-expired registration ticket code is required. The password is stored as a BCrypt hash. Until the user uploads a custom avatar via `PUT /api/auth/avatar`, the `avatar` field is the default avatar URL (`/uploads/avatars/default`), a reserved object of the `avatars` namespace refreshed from the configured source image at every startup.
+- **Description**: Registers a new user. A valid, non-expired registration ticket code is required. The new user is granted the department and role invited by the ticket as a department membership. The password is stored as a BCrypt hash. Until the user uploads a custom avatar via `PUT /api/auth/avatar`, the `avatar` field is the default avatar URL (`/uploads/avatars/default`), a reserved object of the `avatars` namespace refreshed from the configured source image at every startup.
 - **Authentication**: None.
 - **Request Body**: `RegisterRequest`:
   - `phone` (string, required) - phone number; must be a Chinese mobile number (`1[3-9]` followed by 9 digits).
@@ -112,13 +112,19 @@ Keep entries sorted by path, then by HTTP method.
       "avatar": "/uploads/avatars/default?v=1720000000000",
       "phone": "13800000000",
       "email": "alice@example.com",
-      "departments": [],
+      "departments": [
+        {
+          "department": "TECH",
+          "role": "MEMBER"
+        }
+      ],
       "isManager": false
     }
     ```
+  - `departments` (array of objects) - the user's department memberships; for a newly registered user this is the single membership granted by the ticket.
 - **Error Responses**:
   - `400 BAD_REQUEST` - validation failed (e.g. invalid phone format, invalid email, short password), unknown ticket code, or expired ticket code.
-  - `409 CONFLICT` - phone is already registered.
+  - `409 CONFLICT` - phone or username is already registered.
 
 ### `POST /api/auth/login`
 

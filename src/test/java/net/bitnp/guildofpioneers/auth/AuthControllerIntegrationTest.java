@@ -1,6 +1,11 @@
 package net.bitnp.guildofpioneers.auth;
 
+import net.bitnp.guildofpioneers.ticket.RegistrationTicket;
+import net.bitnp.guildofpioneers.ticket.RegistrationTicketRepository;
+import net.bitnp.guildofpioneers.user.entity.Department;
+import net.bitnp.guildofpioneers.user.entity.DepartmentRole;
 import net.bitnp.guildofpioneers.user.entity.User;
+import net.bitnp.guildofpioneers.user.repository.UserDepartmentRepository;
 import net.bitnp.guildofpioneers.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,6 +17,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.mock.web.MockHttpSession;
+
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -31,6 +38,8 @@ class AuthControllerIntegrationTest {
     private static final String PHONE = "13000000000";
     private static final String PASSWORD = "password123";
 
+    private Long aliceId;
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -38,17 +47,24 @@ class AuthControllerIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
+    private UserDepartmentRepository userDepartmentRepository;
+
+    @Autowired
+    private RegistrationTicketRepository registrationTicketRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @BeforeEach
     void setUp() {
+        registrationTicketRepository.deleteAll();
         userRepository.deleteAll();
-        userRepository.save(User.builder()
+        aliceId = userRepository.save(User.builder()
                 .userName("Alice")
                 .phone(PHONE)
                 .email("alice@example.com")
                 .password(passwordEncoder.encode(PASSWORD))
-                .build());
+                .build()).getId();
     }
 
     @Test
@@ -99,6 +115,40 @@ class AuthControllerIntegrationTest {
                                 }
                                 """.formatted(USERNAME)))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void register_grantsDepartmentAndRoleFromTicket() throws Exception {
+        registrationTicketRepository.save(RegistrationTicket.builder()
+                .code("REGCODE1234")
+                .createdAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .createdBy(aliceId)
+                .department(Department.TECH)
+                .role(DepartmentRole.MEMBER)
+                .build());
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "phone": "13100000000",
+                                  "password": "secret123",
+                                  "userName": "Bob",
+                                  "ticketCode": "REGCODE1234",
+                                  "email": "bob@example.com"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.userName").value("Bob"))
+                .andExpect(jsonPath("$.departments[0].department").value("TECH"))
+                .andExpect(jsonPath("$.departments[0].role").value("MEMBER"))
+                .andExpect(jsonPath("$.isManager").value(false));
+
+        User bob = userRepository.findByUserNameIgnoreCase("Bob").orElseThrow();
+        assertThat(userDepartmentRepository.findByUserId(bob.getId()))
+                .anyMatch(membership -> membership.getDepartment() == Department.TECH
+                        && membership.getRole() == DepartmentRole.MEMBER);
     }
 
     @Test

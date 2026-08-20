@@ -1,11 +1,18 @@
 package net.bitnp.guildofpioneers.auth;
 
+import net.bitnp.guildofpioneers.common.PermissionService;
+import net.bitnp.guildofpioneers.ticket.RegistrationTicket;
 import net.bitnp.guildofpioneers.ticket.RegistrationTicketService;
 import net.bitnp.guildofpioneers.ticket.TicketExpiredException;
 import net.bitnp.guildofpioneers.user.AuthResponse;
+import net.bitnp.guildofpioneers.user.UserDepartmentDto;
+import net.bitnp.guildofpioneers.user.entity.Department;
+import net.bitnp.guildofpioneers.user.entity.DepartmentRole;
 import net.bitnp.guildofpioneers.user.entity.User;
+import net.bitnp.guildofpioneers.user.entity.UserDepartment;
 import net.bitnp.guildofpioneers.user.exception.PhoneAlreadyExistsException;
 import net.bitnp.guildofpioneers.user.exception.UserNameAlreadyExistsException;
+import net.bitnp.guildofpioneers.user.repository.UserDepartmentRepository;
 import net.bitnp.guildofpioneers.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,6 +21,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
+
+import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -37,8 +47,23 @@ class AuthServiceTest {
     @Mock
     private RegistrationTicketService registrationTicketService;
 
+    @Mock
+    private UserDepartmentRepository userDepartmentRepository;
+
+    @Mock
+    private PermissionService permissionService;
+
     @InjectMocks
     private AuthService authService;
+
+    private RegistrationTicket ticket(String code) {
+        return RegistrationTicket.builder()
+                .code(code)
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .department(Department.TECH)
+                .role(DepartmentRole.MEMBER)
+                .build();
+    }
 
     @Test
     void register_encodesPasswordAndSavesUser() {
@@ -48,6 +73,18 @@ class AuthServiceTest {
             user.setId(1L);
             return user;
         });
+        when(registrationTicketService.findByCode("VALIDCODE123")).thenReturn(ticket("VALIDCODE123"));
+        when(userDepartmentRepository.save(any(UserDepartment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(userDepartmentRepository.findByUserId(1L)).thenReturn(List.of(
+                UserDepartment.builder()
+                        .id(10L)
+                        .userId(1L)
+                        .department(Department.TECH)
+                        .role(DepartmentRole.MEMBER)
+                        .build()
+        ));
+        when(permissionService.isManager(any(User.class))).thenReturn(false);
 
         RegisterRequest request = RegisterRequest.builder()
                 .phone("13800000000")
@@ -60,12 +97,26 @@ class AuthServiceTest {
         AuthResponse response = authService.register(request);
 
         verify(registrationTicketService).validate("VALIDCODE123");
-        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
-        verify(userRepository).save(captor.capture());
-        assertThat(captor.getValue().getPassword()).isEqualTo("encoded-hash");
-        assertThat(captor.getValue().getEmail()).isEqualTo("alice@example.com");
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(userCaptor.capture());
+        assertThat(userCaptor.getValue().getPassword()).isEqualTo("encoded-hash");
+        assertThat(userCaptor.getValue().getEmail()).isEqualTo("alice@example.com");
+
+        ArgumentCaptor<UserDepartment> membershipCaptor = ArgumentCaptor.forClass(UserDepartment.class);
+        verify(userDepartmentRepository).save(membershipCaptor.capture());
+        assertThat(membershipCaptor.getValue().getUserId()).isEqualTo(1L);
+        assertThat(membershipCaptor.getValue().getDepartment()).isEqualTo(Department.TECH);
+        assertThat(membershipCaptor.getValue().getRole()).isEqualTo(DepartmentRole.MEMBER);
+
         assertThat(response.getId()).isEqualTo(1L);
         assertThat(response.getPhone()).isEqualTo("13800000000");
+        assertThat(response.getDepartments())
+                .extracting(UserDepartmentDto::getDepartment)
+                .containsExactly(Department.TECH);
+        assertThat(response.getDepartments())
+                .extracting(UserDepartmentDto::getRole)
+                .containsExactly(DepartmentRole.MEMBER);
+        assertThat(response.getIsManager()).isFalse();
     }
 
     @Test
