@@ -19,8 +19,6 @@ services:
   backend:
     build:
       context: .
-      additional_contexts:
-        veil_m2: ~/.m2/repository/com/potato
     container_name: guild-backend
     depends_on:
       postgres:

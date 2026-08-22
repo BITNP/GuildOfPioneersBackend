@@ -5,10 +5,6 @@ COPY gradlew gradlew.bat settings.gradle.kts build.gradle.kts ./
 COPY gradle ./gradle
 COPY src ./src
 
-RUN mkdir -p /root/.m2/repository/com/potato
-COPY --from=veil_m2 Veil/1.0-SNAPSHOT \
-    /root/.m2/repository/com/potato/Veil/1.0-SNAPSHOT
-
 RUN chmod +x gradlew && ./gradlew bootJar --no-daemon
 
 FROM eclipse-temurin:17-jre-alpine AS runtime

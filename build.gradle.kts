@@ -15,7 +15,6 @@ java {
 }
 
 repositories {
-    mavenLocal()
     mavenCentral()
 }
 
@@ -41,7 +40,7 @@ dependencies {
     testRuntimeOnly("com.h2database:h2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     implementation("org.slf4j:slf4j-api")
-    implementation("com.potato:Veil:1.0-SNAPSHOT")
+    implementation("io.github.potato-yao:veil:0.1.0")
 }
 
 tasks.withType<Test> {
