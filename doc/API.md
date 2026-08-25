@@ -772,6 +772,47 @@ Keep entries sorted by path, then by HTTP method.
   - `403 FORBIDDEN` - the current user is not a leader of the task.
   - `404 NOT_FOUND` - the task does not exist.
 
+### `GET /api/todo/tree`
+
+- **Description**: Returns the todo hierarchy as a tree, most recently updated first within each level. When `userId` is given, the tree is filtered to that user's related subtree: projects they lead or belong to, tasks they lead or belong to, and actions they carry out; ancestor nodes are kept so related descendants remain reachable. When `userId` is absent, every project is returned. The `depth` parameter controls how many levels are included: `1` returns projects only, `2` adds tasks, and `3` adds actions. When a level is below `depth`, its child list is omitted from the response.
+- **Authentication**: Authenticated session.
+- **Request Body**: -
+- **Path Parameters**: -
+- **Query Parameters**:
+  - `userId` (integer, optional) - the user whose related subtree is returned; when absent, all projects are returned.
+  - `depth` (integer, optional, default `3`, allowed `1`-`3`) - the number of hierarchy levels to include.
+- **Success Response**:
+  - **Status**: `200 OK`
+  - **Body**:
+    ```json
+    [
+      {
+        "id": 1,
+        "title": "Autumn Camp",
+        "tasks": [
+          {
+            "id": 1,
+            "projectId": 1,
+            "title": "Prepare supplies",
+            "actions": [
+              {
+                "id": 1,
+                "taskId": 1,
+                "title": "Write report",
+                "endDate": null
+              }
+            ]
+          }
+        ]
+      }
+    ]
+    ```
+  - With `depth=1`, each project carries only `id` and `title` (no `tasks` key); with `depth=2`, each task carries no `actions` key.
+- **Error Responses**:
+  - `400 BAD_REQUEST` - `depth` is outside the allowed `1`-`3` range.
+  - `401 UNAUTHORIZED` - not authenticated.
+  - `404 NOT_FOUND` - no user with the given `userId` exists.
+
 ### `GET /api/users`
 
 - **Description**: Returns a brief summary of every user (id, userName, avatar), ordered by id. Private contact fields are not included. Intended for user pickers, such as assigning leaders and members to a new project.

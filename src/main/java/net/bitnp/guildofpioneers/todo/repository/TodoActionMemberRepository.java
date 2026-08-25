@@ -12,4 +12,6 @@ import java.util.List;
 public interface TodoActionMemberRepository extends JpaRepository<TodoActionMember, TodoActionMemberKey> {
 
     List<TodoActionMember> findById_ActionId(Long actionId);
+
+    List<TodoActionMember> findById_UserId(Long userId);
 }

@@ -10,6 +10,7 @@ import net.bitnp.guildofpioneers.ticket.TicketExpiredException;
 import net.bitnp.guildofpioneers.ticket.TicketNotFoundException;
 import net.bitnp.guildofpioneers.todo.exception.InvalidActionRequestException;
 import net.bitnp.guildofpioneers.todo.exception.InvalidProjectRequestException;
+import net.bitnp.guildofpioneers.todo.exception.InvalidTodoTreeRequestException;
 import net.bitnp.guildofpioneers.todo.exception.InvalidTaskRequestException;
 import net.bitnp.guildofpioneers.todo.exception.NotProjectLeaderException;
 import net.bitnp.guildofpioneers.todo.exception.TodoActionNotFoundException;
@@ -142,6 +143,14 @@ public class GlobalExceptionHandler {
             InvalidActionRequestException ex, HttpServletRequest request
     ) {
         log.trace("Action creation rejected: {}", ex.getMessage());
+        return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(InvalidTodoTreeRequestException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidTodoTreeRequest(
+            InvalidTodoTreeRequestException ex, HttpServletRequest request
+    ) {
+        log.trace("Todo tree request rejected: {}", ex.getMessage());
         return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), request);
     }
 

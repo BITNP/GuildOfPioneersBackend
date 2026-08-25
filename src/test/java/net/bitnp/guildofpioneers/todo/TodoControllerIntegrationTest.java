@@ -1405,6 +1405,162 @@ class TodoControllerIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void listTree_withoutUserId_returnsFullTree() throws Exception {
+        mockMvc.perform(get("/api/todo/tree").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(project.getId().intValue()))
+                .andExpect(jsonPath("$[0].title").value("Autumn Camp"))
+                .andExpect(jsonPath("$[0].tasks[0].id").value(task.getId().intValue()))
+                .andExpect(jsonPath("$[0].tasks[0].projectId").value(project.getId().intValue()))
+                .andExpect(jsonPath("$[0].tasks[0].actions[0].id").value(action.getId().intValue()))
+                .andExpect(jsonPath("$[0].tasks[0].actions[0].taskId").value(task.getId().intValue()))
+                .andExpect(jsonPath("$[0].tasks[0].actions[0].title").value("Write report"))
+                .andExpect(jsonPath("$[0].tasks[0].actions[0].endDate").value(nullValue()));
+    }
+
+    @Test
+    void listTree_withDepth1_returnsProjectsOnly() throws Exception {
+        mockMvc.perform(get("/api/todo/tree").param("depth", "1").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(project.getId().intValue()))
+                .andExpect(jsonPath("$[0].title").value("Autumn Camp"))
+                .andExpect(jsonPath("$[0].tasks").doesNotExist());
+    }
+
+    @Test
+    void listTree_withDepth2_returnsProjectsAndTasksWithoutActions() throws Exception {
+        mockMvc.perform(get("/api/todo/tree").param("depth", "2").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].tasks[0].id").value(task.getId().intValue()))
+                .andExpect(jsonPath("$[0].tasks[0].actions").doesNotExist());
+    }
+
+    @Test
+    void listTree_withUserId_returnsOnlyRelatedSubtree() throws Exception {
+        User carol = userRepository.save(User.builder()
+                .userName("Carol")
+                .phone("13000000004")
+                .email("carol@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+        TodoProject other = projectRepository.save(TodoProject.builder()
+                .title("Other Project")
+                .description("Unrelated")
+                .createdDate(CREATED)
+                .updatedDate(CREATED)
+                .build());
+        projectLeaderRepository.save(TodoProjectLeader.builder()
+                .id(new TodoProjectLeaderKey(other.getId(), carol.getId()))
+                .build());
+        TodoTask otherTask = taskRepository.save(TodoTask.builder()
+                .projectId(other.getId())
+                .title("Other Task")
+                .description("Unrelated")
+                .createdDate(CREATED)
+                .updatedDate(CREATED)
+                .build());
+        taskLeaderRepository.save(TodoTaskLeader.builder()
+                .id(new TodoTaskLeaderKey(otherTask.getId(), carol.getId()))
+                .build());
+        TodoAction otherAction = actionRepository.save(TodoAction.builder()
+                .taskId(otherTask.getId())
+                .title("Other Action")
+                .description("Unrelated")
+                .createdDate(CREATED)
+                .updatedDate(CREATED)
+                .build());
+        actionMemberRepository.save(TodoActionMember.builder()
+                .id(new TodoActionMemberKey(otherAction.getId(), carol.getId()))
+                .build());
+
+        mockMvc.perform(get("/api/todo/tree").param("userId", member.getId().toString()).session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].id").value(project.getId().intValue()))
+                .andExpect(jsonPath("$[0].tasks", hasSize(1)))
+                .andExpect(jsonPath("$[0].tasks[0].id").value(task.getId().intValue()))
+                .andExpect(jsonPath("$[0].tasks[0].actions", hasSize(1)))
+                .andExpect(jsonPath("$[0].tasks[0].actions[0].id").value(action.getId().intValue()));
+    }
+
+    @Test
+    void listTree_withUserId_keepsProjectOfRelatedTaskAndAction() throws Exception {
+        User carol = userRepository.save(User.builder()
+                .userName("Carol")
+                .phone("13000000004")
+                .email("carol@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+        TodoProject other = projectRepository.save(TodoProject.builder()
+                .title("Other Project")
+                .description("No direct membership")
+                .createdDate(CREATED)
+                .updatedDate(CREATED)
+                .build());
+        TodoTask otherTask = taskRepository.save(TodoTask.builder()
+                .projectId(other.getId())
+                .title("Other Task")
+                .description("Unrelated")
+                .createdDate(CREATED)
+                .updatedDate(CREATED)
+                .build());
+        taskLeaderRepository.save(TodoTaskLeader.builder()
+                .id(new TodoTaskLeaderKey(otherTask.getId(), carol.getId()))
+                .build());
+        TodoAction otherAction = actionRepository.save(TodoAction.builder()
+                .taskId(otherTask.getId())
+                .title("Other Action")
+                .description("Unrelated")
+                .createdDate(CREATED)
+                .updatedDate(CREATED)
+                .build());
+        actionMemberRepository.save(TodoActionMember.builder()
+                .id(new TodoActionMemberKey(otherAction.getId(), carol.getId()))
+                .build());
+
+        mockMvc.perform(get("/api/todo/tree").param("userId", carol.getId().toString()).session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].id").value(other.getId().intValue()))
+                .andExpect(jsonPath("$[0].tasks[0].id").value(otherTask.getId().intValue()))
+                .andExpect(jsonPath("$[0].tasks[0].actions[0].id").value(otherAction.getId().intValue()));
+    }
+
+    @Test
+    void listTree_withUserId_havingNoRelationships_returnsEmptyList() throws Exception {
+        User nobody = userRepository.save(User.builder()
+                .userName("Dana")
+                .phone("13000000005")
+                .email("dana@example.com")
+                .password(passwordEncoder.encode(PASSWORD))
+                .build());
+
+        mockMvc.perform(get("/api/todo/tree").param("userId", nobody.getId().toString()).session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    void listTree_withUnknownUserId_returnsNotFound() throws Exception {
+        mockMvc.perform(get("/api/todo/tree").param("userId", "9999").session(session))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void listTree_withInvalidDepth_returnsBadRequest() throws Exception {
+        mockMvc.perform(get("/api/todo/tree").param("depth", "0").session(session))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/todo/tree").param("depth", "4").session(session))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void listTree_unauthenticatedRequest_isRejected() throws Exception {
+        mockMvc.perform(get("/api/todo/tree"))
+                .andExpect(status().isUnauthorized());
+    }
+
     private MockHttpSession createManagerSession(String username, String phone) throws Exception {
         return login(createManagerUser(username, phone));
     }

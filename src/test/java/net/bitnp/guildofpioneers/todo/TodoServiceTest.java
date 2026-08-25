@@ -18,6 +18,7 @@ import net.bitnp.guildofpioneers.todo.entity.TodoTaskMemberKey;
 import net.bitnp.guildofpioneers.todo.exception.InvalidActionRequestException;
 import net.bitnp.guildofpioneers.todo.exception.InvalidProjectRequestException;
 import net.bitnp.guildofpioneers.todo.exception.InvalidTaskRequestException;
+import net.bitnp.guildofpioneers.todo.exception.InvalidTodoTreeRequestException;
 import net.bitnp.guildofpioneers.todo.exception.TodoActionNotFoundException;
 import net.bitnp.guildofpioneers.todo.exception.TodoProjectNotFoundException;
 import net.bitnp.guildofpioneers.todo.exception.TodoTaskNotFoundException;
@@ -31,6 +32,7 @@ import net.bitnp.guildofpioneers.todo.repository.TodoTaskMemberRepository;
 import net.bitnp.guildofpioneers.todo.repository.TodoTaskRepository;
 import net.bitnp.guildofpioneers.user.entity.User;
 import net.bitnp.guildofpioneers.user.exception.PermissionDeniedException;
+import net.bitnp.guildofpioneers.user.exception.UserNotFoundException;
 import net.bitnp.guildofpioneers.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -1154,5 +1156,157 @@ class TodoServiceTest {
         assertThatThrownBy(() -> todoService.unfinishAction(1L, authentication))
                 .isInstanceOf(PermissionDeniedException.class);
         verify(todoActionRepository, never()).save(any());
+    }
+
+    @Test
+    void listTree_withoutUserId_returnsAllProjectsWithTasksAndActions() {
+        TodoProject project1 = todoProject(1L, Instant.parse("2026-08-15T08:00:00Z"));
+        TodoProject project2 = todoProject(2L, Instant.parse("2026-08-14T08:00:00Z"));
+        when(todoProjectRepository.findAllByOrderByUpdatedDateDesc()).thenReturn(List.of(project1, project2));
+        TodoTask task1 = todoTask(10L, 1L, Instant.parse("2026-08-15T08:00:00Z"));
+        TodoTask task2 = todoTask(11L, 1L, Instant.parse("2026-08-13T08:00:00Z"));
+        TodoTask task3 = todoTask(12L, 2L, Instant.parse("2026-08-14T08:00:00Z"));
+        when(todoTaskRepository.findByProjectIdIn(anyList())).thenReturn(List.of(task1, task2, task3));
+        TodoAction action1 = todoAction(100L, 10L);
+        TodoAction action2 = todoAction(101L, 12L);
+        when(todoActionRepository.findByTaskIdIn(anyList())).thenReturn(List.of(action1, action2));
+
+        List<TodoTreeProjectResponse> tree = todoService.listTree(null, 3);
+
+        assertThat(tree).hasSize(2);
+        assertThat(tree.get(0).getId()).isEqualTo(1L);
+        assertThat(tree.get(0).getTasks()).extracting(TodoTreeTaskResponse::getId).containsExactly(10L, 11L);
+        assertThat(tree.get(0).getTasks().get(0).getActions()).extracting(TodoTreeActionResponse::getId)
+                .containsExactly(100L);
+        assertThat(tree.get(0).getTasks().get(1).getActions()).isEmpty();
+        assertThat(tree.get(1).getTasks()).extracting(TodoTreeTaskResponse::getId).containsExactly(12L);
+        assertThat(tree.get(1).getTasks().get(0).getActions()).extracting(TodoTreeActionResponse::getId)
+                .containsExactly(101L);
+    }
+
+    @Test
+    void listTree_withoutUserId_depth1_returnsProjectsOnly() {
+        when(todoProjectRepository.findAllByOrderByUpdatedDateDesc()).thenReturn(List.of(todoProject(1L)));
+
+        List<TodoTreeProjectResponse> tree = todoService.listTree(null, 1);
+
+        assertThat(tree).hasSize(1);
+        assertThat(tree.get(0).getId()).isEqualTo(1L);
+        assertThat(tree.get(0).getTasks()).isNull();
+        verify(todoTaskRepository, never()).findByProjectIdIn(any());
+        verify(todoActionRepository, never()).findByTaskIdIn(any());
+    }
+
+    @Test
+    void listTree_withoutUserId_depth2_returnsTasksWithoutActions() {
+        when(todoProjectRepository.findAllByOrderByUpdatedDateDesc()).thenReturn(List.of(todoProject(1L)));
+        when(todoTaskRepository.findByProjectIdIn(anyList())).thenReturn(List.of(todoTask(10L, 1L)));
+
+        List<TodoTreeProjectResponse> tree = todoService.listTree(null, 2);
+
+        assertThat(tree.get(0).getTasks()).hasSize(1);
+        assertThat(tree.get(0).getTasks().get(0).getActions()).isNull();
+        verify(todoActionRepository, never()).findByTaskIdIn(any());
+    }
+
+    @Test
+    void listTree_withUserId_returnsOnlyRelatedSubtree() {
+        when(userRepository.existsById(1L)).thenReturn(true);
+        when(todoProjectLeaderRepository.findById_UserId(1L)).thenReturn(List.of(
+                TodoProjectLeader.builder().id(new TodoProjectLeaderKey(1L, 1L)).build()));
+        when(todoProjectMemberRepository.findById_UserId(1L)).thenReturn(List.of());
+        when(todoTaskLeaderRepository.findById_UserId(1L)).thenReturn(List.of(
+                TodoTaskLeader.builder().id(new TodoTaskLeaderKey(10L, 1L)).build()));
+        when(todoTaskMemberRepository.findById_UserId(1L)).thenReturn(List.of());
+        when(todoActionMemberRepository.findById_UserId(1L)).thenReturn(List.of(
+                TodoActionMember.builder().id(new TodoActionMemberKey(100L, 1L)).build()));
+        when(todoActionRepository.findAllById(any())).thenReturn(List.of(todoAction(100L, 10L)));
+        when(todoTaskRepository.findAllById(any())).thenReturn(List.of(todoTask(10L, 1L)));
+        when(todoProjectRepository.findAllById(any())).thenReturn(List.of(todoProject(1L)));
+
+        List<TodoTreeProjectResponse> tree = todoService.listTree(1L, 3);
+
+        assertThat(tree).hasSize(1);
+        assertThat(tree.get(0).getId()).isEqualTo(1L);
+        assertThat(tree.get(0).getTasks()).extracting(TodoTreeTaskResponse::getId).containsExactly(10L);
+        assertThat(tree.get(0).getTasks().get(0).getActions()).extracting(TodoTreeActionResponse::getId)
+                .containsExactly(100L);
+    }
+
+    @Test
+    void listTree_withUserId_keepsAncestorsOfRelatedTaskAndAction() {
+        when(userRepository.existsById(1L)).thenReturn(true);
+        when(todoActionMemberRepository.findById_UserId(1L)).thenReturn(List.of(
+                TodoActionMember.builder().id(new TodoActionMemberKey(100L, 1L)).build()));
+        when(todoActionRepository.findAllById(any())).thenReturn(List.of(todoAction(100L, 10L)));
+        when(todoTaskRepository.findAllById(any())).thenReturn(List.of(todoTask(10L, 1L)));
+        when(todoProjectRepository.findAllById(any())).thenReturn(List.of(todoProject(1L)));
+
+        List<TodoTreeProjectResponse> tree = todoService.listTree(1L, 3);
+
+        assertThat(tree).hasSize(1);
+        assertThat(tree.get(0).getId()).isEqualTo(1L);
+        assertThat(tree.get(0).getTasks().get(0).getActions()).extracting(TodoTreeActionResponse::getId)
+                .containsExactly(100L);
+    }
+
+    @Test
+    void listTree_withUserId_havingNoRelationships_returnsEmptyList() {
+        when(userRepository.existsById(1L)).thenReturn(true);
+
+        List<TodoTreeProjectResponse> tree = todoService.listTree(1L, 3);
+
+        assertThat(tree).isEmpty();
+    }
+
+    @Test
+    void listTree_withUnknownUserId_throwsUserNotFound() {
+        when(userRepository.existsById(99L)).thenReturn(false);
+
+        assertThatThrownBy(() -> todoService.listTree(99L, 3))
+                .isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    void listTree_withInvalidDepth_throwsInvalidTodoTreeRequest() {
+        assertThatThrownBy(() -> todoService.listTree(null, 0))
+                .isInstanceOf(InvalidTodoTreeRequestException.class);
+        assertThatThrownBy(() -> todoService.listTree(null, 4))
+                .isInstanceOf(InvalidTodoTreeRequestException.class);
+        verify(todoProjectRepository, never()).findAllByOrderByUpdatedDateDesc();
+    }
+
+    private TodoProject todoProject(Long id, Instant updatedDate) {
+        return TodoProject.builder()
+                .id(id)
+                .title("Project " + id)
+                .description("Description " + id)
+                .createdDate(updatedDate)
+                .updatedDate(updatedDate)
+                .build();
+    }
+
+    private TodoTask todoTask(Long id, Long projectId) {
+        return todoTask(id, projectId, Instant.parse("2026-08-13T08:00:00Z"));
+    }
+
+    private TodoTask todoTask(Long id, Long projectId, Instant updatedDate) {
+        return TodoTask.builder()
+                .id(id)
+                .projectId(projectId)
+                .title("Task " + id)
+                .createdDate(updatedDate)
+                .updatedDate(updatedDate)
+                .build();
+    }
+
+    private TodoAction todoAction(Long id, Long taskId) {
+        return TodoAction.builder()
+                .id(id)
+                .taskId(taskId)
+                .title("Action " + id)
+                .createdDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .updatedDate(Instant.parse("2026-08-13T08:00:00Z"))
+                .build();
     }
 }

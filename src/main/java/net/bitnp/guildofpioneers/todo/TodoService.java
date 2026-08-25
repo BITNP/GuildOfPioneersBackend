@@ -19,6 +19,7 @@ import net.bitnp.guildofpioneers.todo.entity.TodoTaskMemberKey;
 import net.bitnp.guildofpioneers.todo.exception.InvalidActionRequestException;
 import net.bitnp.guildofpioneers.todo.exception.InvalidProjectRequestException;
 import net.bitnp.guildofpioneers.todo.exception.InvalidTaskRequestException;
+import net.bitnp.guildofpioneers.todo.exception.InvalidTodoTreeRequestException;
 import net.bitnp.guildofpioneers.todo.exception.NotProjectLeaderException;
 import net.bitnp.guildofpioneers.todo.exception.TodoActionNotFoundException;
 import net.bitnp.guildofpioneers.todo.exception.TodoProjectNotFoundException;
@@ -33,6 +34,7 @@ import net.bitnp.guildofpioneers.todo.repository.TodoTaskMemberRepository;
 import net.bitnp.guildofpioneers.todo.repository.TodoTaskRepository;
 import net.bitnp.guildofpioneers.user.entity.User;
 import net.bitnp.guildofpioneers.user.exception.PermissionDeniedException;
+import net.bitnp.guildofpioneers.user.exception.UserNotFoundException;
 import net.bitnp.guildofpioneers.user.repository.UserRepository;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -41,6 +43,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -60,6 +64,8 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 public class TodoService {
+
+    private static final int MAX_TREE_DEPTH = 3;
 
     private final TodoProjectRepository todoProjectRepository;
     private final TodoTaskRepository todoTaskRepository;
@@ -109,6 +115,161 @@ public class TodoService {
         return todoProjectRepository.findAllByOrderByUpdatedDateDesc().stream()
                 .map(this::toProjectResponse)
                 .toList();
+    }
+
+    /**
+     * Returns the todo hierarchy as a tree, optionally restricted to the projects,
+     * tasks, and actions a given user is related to.
+     *
+     * <p>When {@code userId} is present, the tree is filtered to the user's related
+     * subtree: projects they lead or belong to, tasks they lead or belong to, and
+     * actions they carry out. Ancestor nodes are kept so related descendants remain
+     * reachable. When {@code userId} is absent, all projects are returned. The
+     * {@code depth} parameter controls how many levels are included: 1 returns
+     * projects only, 2 adds tasks, and 3 adds actions.</p>
+     *
+     * @param userId the user whose related subtree is requested, or {@code null} for all projects
+     * @param depth  the number of hierarchy levels to include (1-3)
+     * @return the tree of projects, most recently updated first
+     * @throws InvalidTodoTreeRequestException if {@code depth} is outside the supported range
+     * @throws UserNotFoundException           if {@code userId} does not exist
+     */
+    @Transactional(readOnly = true)
+    public List<TodoTreeProjectResponse> listTree(Long userId, int depth) {
+        if (depth < 1 || depth > MAX_TREE_DEPTH) {
+            throw new InvalidTodoTreeRequestException("depth must be between 1 and " + MAX_TREE_DEPTH);
+        }
+        if (userId != null) {
+            if (!userRepository.existsById(userId)) {
+                throw new UserNotFoundException(userId);
+            }
+            return buildRelatedTree(userId, depth);
+        }
+        return buildAllTree(depth);
+    }
+
+    /**
+     * Builds the tree of every project, most recently updated first.
+     *
+     * @param depth the number of hierarchy levels to include (1-3)
+     * @return the full project tree
+     */
+    private List<TodoTreeProjectResponse> buildAllTree(int depth) {
+        List<TodoProject> projects = todoProjectRepository.findAllByOrderByUpdatedDateDesc();
+        Map<Long, List<TodoTask>> tasksByProject = depth >= 2
+                ? groupTasksByProject(todoTaskRepository.findByProjectIdIn(
+                        projects.stream().map(TodoProject::getId).toList()))
+                : Map.of();
+        Map<Long, List<TodoAction>> actionsByTask = depth >= 3
+                ? groupActionsByTask(todoActionRepository.findByTaskIdIn(
+                        tasksByProject.values().stream().flatMap(List::stream).map(TodoTask::getId).toList()))
+                : Map.of();
+        return projects.stream()
+                .map(project -> toTreeProject(project, depth, tasksByProject, actionsByTask))
+                .toList();
+    }
+
+    /**
+     * Builds the tree of a single user's related projects, tasks, and actions,
+     * keeping ancestors so related descendants remain reachable.
+     *
+     * @param userId the user whose related subtree is requested
+     * @param depth  the number of hierarchy levels to include (1-3)
+     * @return the user's related project tree
+     */
+    private List<TodoTreeProjectResponse> buildRelatedTree(Long userId, int depth) {
+        Set<Long> projectIds = new LinkedHashSet<>();
+        todoProjectLeaderRepository.findById_UserId(userId)
+                .forEach(leader -> projectIds.add(leader.getId().getProjectId()));
+        todoProjectMemberRepository.findById_UserId(userId)
+                .forEach(member -> projectIds.add(member.getId().getProjectId()));
+
+        Set<Long> taskIds = new LinkedHashSet<>();
+        todoTaskLeaderRepository.findById_UserId(userId)
+                .forEach(leader -> taskIds.add(leader.getId().getTaskId()));
+        todoTaskMemberRepository.findById_UserId(userId)
+                .forEach(member -> taskIds.add(member.getId().getTaskId()));
+
+        Set<Long> actionIds = new LinkedHashSet<>();
+        todoActionMemberRepository.findById_UserId(userId)
+                .forEach(member -> actionIds.add(member.getId().getActionId()));
+
+        // Keep ancestors so a related task or action is never orphaned.
+        List<TodoAction> actions = todoActionRepository.findAllById(actionIds);
+        actions.forEach(action -> taskIds.add(action.getTaskId()));
+        List<TodoTask> tasks = todoTaskRepository.findAllById(taskIds);
+        tasks.forEach(task -> projectIds.add(task.getProjectId()));
+
+        if (projectIds.isEmpty()) {
+            return List.of();
+        }
+        List<TodoProject> projects = todoProjectRepository.findAllById(projectIds).stream()
+                .sorted(Comparator.comparing(TodoProject::getUpdatedDate).reversed())
+                .toList();
+
+        Map<Long, List<TodoTask>> tasksByProject = depth >= 2 ? groupTasksByProject(tasks) : Map.of();
+        Map<Long, List<TodoAction>> actionsByTask = depth >= 3 ? groupActionsByTask(actions) : Map.of();
+        return projects.stream()
+                .map(project -> toTreeProject(project, depth, tasksByProject, actionsByTask))
+                .toList();
+    }
+
+    private Map<Long, List<TodoTask>> groupTasksByProject(List<TodoTask> tasks) {
+        Map<Long, List<TodoTask>> byProject = tasks.stream()
+                .collect(Collectors.groupingBy(TodoTask::getProjectId, Collectors.toList()));
+        byProject.values().forEach(list -> list.sort(Comparator.comparing(TodoTask::getUpdatedDate).reversed()));
+        return byProject;
+    }
+
+    private Map<Long, List<TodoAction>> groupActionsByTask(List<TodoAction> actions) {
+        Map<Long, List<TodoAction>> byTask = actions.stream()
+                .collect(Collectors.groupingBy(TodoAction::getTaskId, Collectors.toList()));
+        byTask.values().forEach(list -> list.sort(Comparator.comparing(TodoAction::getUpdatedDate).reversed()));
+        return byTask;
+    }
+
+    private TodoTreeProjectResponse toTreeProject(
+            TodoProject project, int depth,
+            Map<Long, List<TodoTask>> tasksByProject,
+            Map<Long, List<TodoAction>> actionsByTask
+    ) {
+        List<TodoTreeTaskResponse> tasks = null;
+        if (depth >= 2) {
+            tasks = tasksByProject.getOrDefault(project.getId(), List.of()).stream()
+                    .map(task -> toTreeTask(task, depth, actionsByTask))
+                    .toList();
+        }
+        return TodoTreeProjectResponse.builder()
+                .id(project.getId())
+                .title(project.getTitle())
+                .tasks(tasks)
+                .build();
+    }
+
+    private TodoTreeTaskResponse toTreeTask(
+            TodoTask task, int depth, Map<Long, List<TodoAction>> actionsByTask
+    ) {
+        List<TodoTreeActionResponse> actions = null;
+        if (depth >= 3) {
+            actions = actionsByTask.getOrDefault(task.getId(), List.of()).stream()
+                    .map(this::toTreeAction)
+                    .toList();
+        }
+        return TodoTreeTaskResponse.builder()
+                .id(task.getId())
+                .projectId(task.getProjectId())
+                .title(task.getTitle())
+                .actions(actions)
+                .build();
+    }
+
+    private TodoTreeActionResponse toTreeAction(TodoAction action) {
+        return TodoTreeActionResponse.builder()
+                .id(action.getId())
+                .taskId(action.getTaskId())
+                .title(action.getTitle())
+                .endDate(action.getEndDate())
+                .build();
     }
 
     /**

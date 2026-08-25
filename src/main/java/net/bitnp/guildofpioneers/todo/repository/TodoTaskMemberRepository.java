@@ -12,4 +12,6 @@ import java.util.List;
 public interface TodoTaskMemberRepository extends JpaRepository<TodoTaskMember, TodoTaskMemberKey> {
 
     List<TodoTaskMember> findById_TaskId(Long taskId);
+
+    List<TodoTaskMember> findById_UserId(Long userId);
 }

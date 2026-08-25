@@ -12,4 +12,6 @@ import java.util.List;
 public interface TodoProjectMemberRepository extends JpaRepository<TodoProjectMember, TodoProjectMemberKey> {
 
     List<TodoProjectMember> findById_ProjectId(Long projectId);
+
+    List<TodoProjectMember> findById_UserId(Long userId);
 }

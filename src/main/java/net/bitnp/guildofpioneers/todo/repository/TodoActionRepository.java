@@ -3,6 +3,7 @@ package net.bitnp.guildofpioneers.todo.repository;
 import net.bitnp.guildofpioneers.todo.entity.TodoAction;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -11,4 +12,6 @@ import java.util.List;
 public interface TodoActionRepository extends JpaRepository<TodoAction, Long> {
 
     List<TodoAction> findByTaskIdOrderByUpdatedDateDesc(Long taskId);
+
+    List<TodoAction> findByTaskIdIn(Collection<Long> taskIds);
 }

@@ -34,6 +34,24 @@ public class TodoController {
     }
 
     /**
+     * Returns the todo hierarchy as a tree. When {@code userId} is given, only the
+     * projects, tasks, and actions the user is related to are returned; otherwise
+     * every project is returned. {@code depth} controls how many levels are
+     * included: 1 for projects, 2 adds tasks, 3 adds actions.
+     *
+     * @param userId the user whose related subtree is requested, or absent for all projects
+     * @param depth  the number of hierarchy levels to include (default 3)
+     * @return the project tree
+     */
+    @GetMapping("/tree")
+    public List<TodoTreeProjectResponse> listTree(
+            @RequestParam(required = false) Long userId,
+            @RequestParam(defaultValue = "3") int depth
+    ) {
+        return todoService.listTree(userId, depth);
+    }
+
+    /**
      * Lists all projects, newest first.
      */
     @GetMapping("/projects")
