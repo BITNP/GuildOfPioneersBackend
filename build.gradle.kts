@@ -40,7 +40,8 @@ dependencies {
     testRuntimeOnly("com.h2database:h2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     implementation("org.slf4j:slf4j-api")
-    implementation("io.github.potato-yao:veil:0.1.0")
+    implementation(platform("software.amazon.awssdk:bom:2.55.1"))
+    implementation("software.amazon.awssdk:s3")
 }
 
 tasks.withType<Test> {
