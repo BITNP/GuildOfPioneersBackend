@@ -16,6 +16,27 @@ services:
       timeout: 5s
       retries: 10
 
+  rustfs:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
+
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+
+      RUSTFS_OBS_LOGGER_LEVEL: error
+
+    volumes:
+      - rustfs-data:/data
+
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+    command: /data
+
   backend:
     build:
       context: .
@@ -46,3 +67,4 @@ services:
 volumes:
   postgres_data:
   uploads_data:
+  rustfs-data:
