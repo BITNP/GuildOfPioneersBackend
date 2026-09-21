@@ -236,7 +236,7 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `PUT /api/auth/avatar`
 
-- **Description**: Uploads (or replaces) the current user's avatar. The image is stored through the Veil storage layer, keyed by the user's id in the `avatars` namespace, and the `avatar` field of the response is the public path `/uploads/avatars/{userId}` with a `?v=` cache-busting version. Re-uploading replaces the stored file in place. Users without a custom avatar keep getting the default avatar URL (`/uploads/avatars/default`).
+- **Description**: Uploads (or replaces) the current user's avatar. The image is stored through the object storage layer, keyed by the user's id in the `avatars` namespace, and the `avatar` field of the response is the public path `/uploads/avatars/{userId}` with a `?v=` cache-busting version. Re-uploading replaces the stored file in place. Users without a custom avatar keep getting the default avatar URL (`/uploads/avatars/default`).
 - **Authentication**: Authenticated session.
 - **Request Body**: multipart form-data:
   - `file` (binary, required) - avatar image. Allowed types: `image/jpeg`, `image/png`, `image/webp`, `image/gif`. Max size 5MB.
@@ -593,7 +593,7 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `PUT /api/todo/projects/{projectId}/cover`
 
-- **Description**: Stores (or replaces) the cover image of a project. The image is stored through the Veil storage layer, keyed by the project's id in the `project_covers` namespace, and the `cover` field of the response is the public path `/uploads/project_covers/{projectId}` with a `?v=` cache-busting version. The change bumps the project's `updatedDate`. A leader of the project may set its cover, as may any user in the `ADMIN` department.
+- **Description**: Stores (or replaces) the cover image of a project. The image is stored through the object storage layer, keyed by the project's id in the `project_covers` namespace, and the `cover` field of the response is the public path `/uploads/project_covers/{projectId}` with a `?v=` cache-busting version. The change bumps the project's `updatedDate`. A leader of the project may set its cover, as may any user in the `ADMIN` department.
 - **Authentication**: Authenticated session. The current user must be a leader of the project, or a member of the `ADMIN` department.
 - **Request Body**: multipart form-data:
   - `file` (binary, required) - cover image. Allowed types: `image/jpeg`, `image/png`, `image/webp`, `image/gif`. Max size 5MB.
@@ -908,7 +908,7 @@ Keep entries sorted by path, then by HTTP method.
 
 ### `PUT /api/users/{id}/avatar`
 
-- **Description**: Replaces the avatar of the user with the given id. The target user may update their own avatar, and any user in the `ADMIN` department may update any avatar. The image is stored through the Veil storage layer, keyed by the target user's id in the `avatars` namespace, and the `avatar` field of the response is the public path `/uploads/avatars/{userId}` with a `?v=` cache-busting version.
+- **Description**: Replaces the avatar of the user with the given id. The target user may update their own avatar, and any user in the `ADMIN` department may update any avatar. The image is stored through the object storage layer, keyed by the target user's id in the `avatars` namespace, and the `avatar` field of the response is the public path `/uploads/avatars/{userId}` with a `?v=` cache-busting version.
 - **Authentication**: Authenticated session. The current user must be the target user, or a member of the `ADMIN` department.
 - **Request Body**: multipart form-data:
   - `file` (binary, required) - avatar image. Allowed types: `image/jpeg`, `image/png`, `image/webp`, `image/gif`. Max size 5MB.
@@ -924,7 +924,7 @@ Keep entries sorted by path, then by HTTP method.
   - `404 NOT_FOUND` - no user with the given id exists.
   - `413 CONTENT_TOO_LARGE` - file exceeds the maximum allowed size.
 
-- **Description**: Serves a stored file from the Veil storage layer via a controller so authorization can be applied later. The final path segment is the object key (an extension is optional and ignored for lookup), e.g. `GET /uploads/avatars/1` serves the avatar with key `1`. Public for the `avatars` namespace. The `avatars` namespace additionally holds the reserved key `default`: the default avatar served to users without their own avatar, refreshed from the configured source image (`app.default-avatar`, active while `app.default-avatar-enabled=true`) at every startup.
+- **Description**: Serves a stored file from the object storage layer via a controller so authorization can be applied later. The final path segment is the object key (an extension is optional and ignored for lookup), e.g. `GET /uploads/avatars/1` serves the avatar with key `1`. Public for the `avatars` namespace. The `avatars` namespace additionally holds the reserved key `default`: the default avatar served to users without their own avatar, refreshed from the configured source image (`app.default-avatar`, active while `app.default-avatar-enabled=true`) at every startup.
 - **Authentication**: None.
 - **Request Body**: -
 - **Path Parameters**:

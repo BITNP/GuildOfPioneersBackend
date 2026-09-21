@@ -14,11 +14,10 @@ WORKDIR /app
 COPY --from=build /app/build/libs/GuildOfPioneers-0.0.1-SNAPSHOT.jar app.jar
 COPY default_avatar.jpg .
 
-RUN mkdir -p /app/uploads && chown -R app:app /app
+RUN chown -R app:app /app
 
 USER app
 ENV SPRING_PROFILES_ACTIVE=prod \
-    APP_UPLOAD_DIR=/app/uploads \
     APP_DEFAULT_AVATAR=/app/default_avatar.jpg
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
