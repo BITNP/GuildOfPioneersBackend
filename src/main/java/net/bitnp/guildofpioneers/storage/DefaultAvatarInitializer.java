@@ -1,13 +1,12 @@
 package net.bitnp.guildofpioneers.storage;
 
-import com.potato.object.ObjectManager;
-import com.potato.object.ObjectStatement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -17,7 +16,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
- * Imports the default avatar image into Veil storage on every startup.
+ * Imports the default avatar image into object storage on every startup.
  *
  * <p>The source image is read from the filesystem location configured via
  * {@code app.default-avatar} and stored under the reserved {@code default} key of the
@@ -27,23 +26,26 @@ import java.nio.file.Paths;
  * Active only when {@code app.default-avatar-enabled=true} (the default).</p>
  */
 @Component
+@Order(10)
 @ConditionalOnProperty(name = "app.default-avatar-enabled", havingValue = "true", matchIfMissing = true)
 public class DefaultAvatarInitializer implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultAvatarInitializer.class);
 
-    private final ObjectManagerRegistry registry;
+    private static final String DEFAULT_AVATAR_CONTENT_TYPE = "image/jpeg";
+
+    private final ObjectStorage objectStorage;
     private final Path defaultAvatarPath;
 
     /**
-     * @param registry       the namespace managers to store the default avatar into
+     * @param objectStorage  the storage backend to store the default avatar into
      * @param defaultAvatar  the filesystem location of the default avatar image
      */
     public DefaultAvatarInitializer(
-            ObjectManagerRegistry registry,
+            ObjectStorage objectStorage,
             @Value("${app.default-avatar:./default_avatar.jpg}") String defaultAvatar
     ) {
-        this.registry = registry;
+        this.objectStorage = objectStorage;
         this.defaultAvatarPath = Paths.get(defaultAvatar).toAbsolutePath().normalize();
     }
 
@@ -55,24 +57,19 @@ public class DefaultAvatarInitializer implements ApplicationRunner {
      */
     @Override
     public void run(ApplicationArguments args) {
-        ObjectManager manager = registry.get(ObjectManagerRegistry.NAMESPACE_AVATARS);
-        if (manager == null) {
-            log.warn("Cannot import default avatar: unknown namespace {}",
-                    ObjectManagerRegistry.NAMESPACE_AVATARS);
-            return;
-        }
         try (InputStream source = Files.newInputStream(defaultAvatarPath)) {
-            manager.update(
-                    ObjectStatement.builder().key(FileStorageService.DEFAULT_AVATAR_KEY).build(),
-                    FileStorageService.DEFAULT_AVATAR_KEY + ".jpg",
-                    source);
-            log.info("Imported default avatar {} into Veil storage", defaultAvatarPath);
+            objectStorage.put(
+                    FileStorageService.objectKey(
+                            FileStorageService.NAMESPACE_AVATARS, FileStorageService.DEFAULT_AVATAR_KEY),
+                    source,
+                    Files.size(defaultAvatarPath),
+                    DEFAULT_AVATAR_CONTENT_TYPE);
+            log.info("Imported default avatar {} into object storage", defaultAvatarPath);
         } catch (IOException ex) {
             log.error("Failed to read default avatar {}", defaultAvatarPath, ex);
         } catch (RuntimeException ex) {
-            // Veil wraps its storage/database failures in runtime exceptions; a broken
-            // default avatar must not prevent the application from starting.
-            log.error("Failed to store default avatar {} in Veil storage", defaultAvatarPath, ex);
+            // A broken default avatar must not prevent the application from starting.
+            log.error("Failed to store default avatar {} in object storage", defaultAvatarPath, ex);
         }
     }
 }

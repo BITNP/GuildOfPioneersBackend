@@ -1,28 +1,18 @@
 package net.bitnp.guildofpioneers.storage;
 
-import com.potato.object.ObjectData;
-import com.potato.object.ObjectManager;
-import com.potato.object.ObjectMetadata;
-import com.potato.object.ObjectReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -34,27 +24,20 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class FileStorageServiceTest {
 
-    private static final String NAMESPACE = ObjectManagerRegistry.NAMESPACE_AVATARS;
-
-    @TempDir
-    Path tempDir;
+    private static final String NAMESPACE = FileStorageService.NAMESPACE_AVATARS;
 
     @Mock
-    private ObjectManagerRegistry registry;
-
-    @Mock
-    private ObjectManager manager;
+    private ObjectStorage objectStorage;
 
     private FileStorageService service;
 
     @BeforeEach
     void setUp() {
-        service = new FileStorageService(registry, new AvatarFileTypeHandler(), tempDir.toString());
+        service = new FileStorageService(objectStorage, new AvatarFileTypeHandler());
     }
 
     @Test
-    void storeAvatar_storesFileAndReturnsPublicUrl() throws IOException {
-        when(registry.get(NAMESPACE)).thenReturn(manager);
+    void storeAvatar_storesFileAndReturnsPublicUrl() throws Exception {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "avatar.png", "image/png", new byte[]{1, 2, 3}
         );
@@ -62,16 +45,16 @@ class FileStorageServiceTest {
         String url = service.storeAvatar(file, 42L);
 
         assertThat(url).isEqualTo("/uploads/avatars/42");
-        verify(manager).update(argThat(s -> "42".equals(s.key())), eq("42.png"), any());
+        verify(objectStorage).put(eq("avatars/42"), any(), eq(3L), eq("image/png"));
     }
 
     @Test
-    void storeAvatar_rejectsEmptyFile() {
+    void storeAvatar_rejectsEmptyFile() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", "avatar.png", "image/png", new byte[0]);
 
         assertThatThrownBy(() -> service.storeAvatar(file, 42L))
                 .isInstanceOf(InvalidFileTypeException.class);
-        verify(registry, never()).get(any());
+        verify(objectStorage, never()).put(any(), any(), anyLong(), any());
     }
 
     @Test
@@ -86,84 +69,46 @@ class FileStorageServiceTest {
 
     @Test
     void get_returnsStoredObject() {
-        ObjectMetadata metadata = new ObjectMetadata(
-                "42.png", "png", 3L, "md5", "2026-01-01T00:00:00Z", null, "DISK", "avatars/42.png", 0L);
-        ObjectData data = new ObjectData(metadata, new ByteArrayInputStream(new byte[]{1, 2, 3}));
-        when(registry.get(NAMESPACE)).thenReturn(manager);
-        when(manager.get(any())).thenReturn(data);
+        StoredObject stored = new StoredObject(new ByteArrayInputStream(new byte[]{1, 2, 3}), "image/png", 3L);
+        when(objectStorage.get("avatars/42")).thenReturn(stored);
 
-        assertThat(service.get(NAMESPACE, "42")).isSameAs(data);
+        assertThat(service.get(NAMESPACE, "42")).isSameAs(stored);
     }
 
     @Test
     void get_missingKey_throwsNotFound() {
-        when(registry.get(NAMESPACE)).thenReturn(manager);
-        when(manager.get(any())).thenThrow(new IllegalArgumentException("does not exist"));
+        when(objectStorage.get("avatars/42")).thenThrow(new StoredFileNotFoundException("avatars/42"));
 
         assertThatThrownBy(() -> service.get(NAMESPACE, "42"))
                 .isInstanceOf(StoredFileNotFoundException.class);
     }
 
     @Test
-    void get_unknownNamespace_throwsNotFound() {
-        when(registry.get("unknown")).thenReturn(null);
-
-        assertThatThrownBy(() -> service.get("unknown", "42"))
-                .isInstanceOf(StoredFileNotFoundException.class);
-    }
-
-    @Test
     void delete_removesStoredFile() {
-        when(registry.get(NAMESPACE)).thenReturn(manager);
-
         service.delete(NAMESPACE, "42");
 
-        verify(manager).remove(argThat(s -> "42".equals(s.key())));
+        verify(objectStorage).delete("avatars/42");
     }
 
     @Test
-    void delete_unknownNamespace_isNoOp() {
-        when(registry.get("unknown")).thenReturn(null);
+    void avatarUrl_returnsUrlWithVersion() {
+        when(objectStorage.head("avatars/42")).thenReturn(new ObjectInfo("image/png", 3L, "v123"));
 
-        service.delete("unknown", "42");
-
-        verify(manager, never()).remove(any());
+        assertThat(service.avatarUrl(42L)).isEqualTo("/uploads/avatars/42?v=v123");
     }
 
     @Test
-    void avatarUrl_returnsUrlWithVersion() throws IOException {
-        when(registry.get(NAMESPACE)).thenReturn(manager);
-        ObjectMetadata metadata = new ObjectMetadata(
-                "42.png", "png", 3L, "md5", "2026-01-01T00:00:00Z", null, "DISK", "avatars/42.png", 0L);
-        ObjectReference reference = new ObjectReference("42", Map.of(), metadata);
-        when(manager.query(any())).thenReturn(List.of(reference));
+    void avatarUrl_fallsBackToDefaultWhenUserHasNone() {
+        when(objectStorage.head("avatars/42")).thenReturn(null);
+        when(objectStorage.head("avatars/default")).thenReturn(new ObjectInfo("image/jpeg", 3L, "v456"));
 
-        Path file = tempDir.resolve("avatars/42.png");
-        Files.createDirectories(file.getParent());
-        Files.write(file, new byte[]{1, 2, 3});
-
-        assertThat(service.avatarUrl(42L)).startsWith("/uploads/avatars/42?v=");
-    }
-
-    @Test
-    void avatarUrl_fallsBackToDefaultWhenUserHasNone() throws IOException {
-        when(registry.get(NAMESPACE)).thenReturn(manager);
-        ObjectMetadata metadata = new ObjectMetadata(
-                "default.jpg", "jpg", 3L, "md5", "2026-01-01T00:00:00Z", null, "DISK", "avatars/default.jpg", 0L);
-        ObjectReference reference = new ObjectReference("default", Map.of(), metadata);
-        when(manager.query(any())).thenReturn(List.of(), List.of(reference));
-
-        Path file = tempDir.resolve("avatars/default.jpg");
-        Files.createDirectories(file.getParent());
-        Files.write(file, new byte[]{1, 2, 3});
-
-        assertThat(service.avatarUrl(42L)).startsWith("/uploads/avatars/default?v=");
+        assertThat(service.avatarUrl(42L)).isEqualTo("/uploads/avatars/default?v=v456");
     }
 
     @Test
     void avatarUrl_returnsBareDefaultUrlWhenNothingStored() {
-        when(registry.get(NAMESPACE)).thenReturn(manager);
-        when(manager.query(any())).thenReturn(List.of(), List.of());
+        when(objectStorage.head("avatars/42")).thenReturn(null);
+        when(objectStorage.head("avatars/default")).thenReturn(null);
 
         assertThat(service.avatarUrl(42L)).isEqualTo("/uploads/avatars/default");
     }

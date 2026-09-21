@@ -1,6 +1,5 @@
 package net.bitnp.guildofpioneers.storage;
 
-import com.potato.object.ObjectData;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,6 +13,9 @@ import java.util.Locale;
 
 /**
  * Serves stored files through the application so authorization can be added later.
+ *
+ * <p>Files are streamed from the injected object storage, so the browser never talks
+ * to the storage server directly and the public URL contract stays stable.</p>
  */
 @RestController
 @RequestMapping("/uploads")
@@ -32,7 +34,7 @@ public class FileController {
      * Streams a stored file to the client.
      *
      * @param namespace the namespace the file belongs to
-     * @param fileName  the stored file name, including its extension
+     * @param fileName  the stored file name; an extension is optional and ignored for lookup
      * @param response  the servlet response to write the file to
      * @throws IOException if the file cannot be streamed
      */
@@ -43,9 +45,9 @@ public class FileController {
             HttpServletResponse response
     ) throws IOException {
         String key = stripExtension(fileName);
-        ObjectData data = fileStorageService.get(namespace, key);
-        response.setContentType(contentTypeFor(data.metadata().fileExtension()));
-        response.setContentLengthLong(data.metadata().fileSize());
+        StoredObject data = fileStorageService.get(namespace, key);
+        response.setContentType(data.contentType() != null ? data.contentType() : contentTypeFor(fileName));
+        response.setContentLengthLong(data.size());
         try (InputStream stream = data.stream()) {
             stream.transferTo(response.getOutputStream());
         }
@@ -56,8 +58,11 @@ public class FileController {
         return dot == -1 ? fileName : fileName.substring(0, dot);
     }
 
-    private static String contentTypeFor(String extension) {
-        return switch (extension == null ? "" : extension.toLowerCase(Locale.ROOT)) {
+    private static String contentTypeFor(String fileName) {
+        String extension = stripExtension(fileName).equals(fileName)
+                ? ""
+                : fileName.substring(fileName.lastIndexOf('.') + 1);
+        return switch (extension.toLowerCase(Locale.ROOT)) {
             case "jpg", "jpeg" -> MediaType.IMAGE_JPEG_VALUE;
             case "png" -> MediaType.IMAGE_PNG_VALUE;
             case "webp" -> "image/webp";

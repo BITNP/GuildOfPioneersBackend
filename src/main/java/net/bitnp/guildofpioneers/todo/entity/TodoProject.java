@@ -17,8 +17,8 @@ import java.time.Instant;
 
 /**
  * Represents the top level of the todo hierarchy. A project is owned by one or
- * more leaders and worked on by its members. Its cover image is managed by Veil
- * and not stored in the database.
+ * more leaders and worked on by its members. Its cover image is managed by the
+ * storage layer and not stored in the database.
  */
 @Entity
 @Table(name = "todo_projects")

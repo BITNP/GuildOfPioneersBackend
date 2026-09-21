@@ -1,7 +1,5 @@
 package net.bitnp.guildofpioneers.storage;
 
-import com.potato.object.ObjectData;
-import com.potato.object.ObjectMetadata;
 import net.bitnp.guildofpioneers.config.SecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,9 +31,8 @@ class FileControllerTest {
 
     @Test
     void serve_returnsFileBytesWithContentType() throws Exception {
-        ObjectMetadata metadata = new ObjectMetadata(
-                "42.png", "png", 3L, "md5", "2026-01-01T00:00:00Z", null, "DISK", "avatars/42.png", 0L);
-        ObjectData data = new ObjectData(metadata, new ByteArrayInputStream(new byte[]{1, 2, 3}));
+        StoredObject data = new StoredObject(
+                new ByteArrayInputStream(new byte[]{1, 2, 3}), MediaType.IMAGE_PNG_VALUE, 3L);
         when(fileStorageService.get("avatars", "42")).thenReturn(data);
 
         mockMvc.perform(get("/uploads/avatars/42.png"))

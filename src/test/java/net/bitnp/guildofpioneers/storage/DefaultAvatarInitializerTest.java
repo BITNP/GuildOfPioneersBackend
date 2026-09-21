@@ -1,7 +1,5 @@
 package net.bitnp.guildofpioneers.storage;
 
-import com.potato.object.ObjectManager;
-import com.potato.object.ObjectStatement;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -12,16 +10,18 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link DefaultAvatarInitializer}.
@@ -33,67 +33,54 @@ class DefaultAvatarInitializerTest {
     Path tempDir;
 
     @Mock
-    private ObjectManagerRegistry registry;
-
-    @Mock
-    private ObjectManager manager;
+    private ObjectStorage objectStorage;
 
     @Test
-    void run_storesDefaultAvatarIntoVeil() throws IOException {
+    void run_storesDefaultAvatarIntoObjectStorage() throws IOException {
         Path image = tempDir.resolve("default_avatar.jpg");
         byte[] content = {1, 2, 3, 4};
         Files.write(image, content);
-        when(registry.get(ObjectManagerRegistry.NAMESPACE_AVATARS)).thenReturn(manager);
         AtomicReference<String> storedKey = new AtomicReference<>();
-        AtomicReference<String> storedFileName = new AtomicReference<>();
+        AtomicReference<String> storedContentType = new AtomicReference<>();
         AtomicReference<byte[]> storedContent = new AtomicReference<>();
+        AtomicLong storedLength = new AtomicLong();
         doAnswer(invocation -> {
-            storedKey.set(invocation.getArgument(0, ObjectStatement.class).key());
-            storedFileName.set(invocation.getArgument(1));
-            try (InputStream source = invocation.getArgument(2)) {
+            storedKey.set(invocation.getArgument(0));
+            try (InputStream source = invocation.getArgument(1)) {
                 storedContent.set(source.readAllBytes());
             }
+            storedLength.set(invocation.getArgument(2));
+            storedContentType.set(invocation.getArgument(3));
             return null;
-        }).when(manager).update(any(), any(), any());
+        }).when(objectStorage).put(any(), any(), anyLong(), any());
 
-        DefaultAvatarInitializer initializer = new DefaultAvatarInitializer(registry, image.toString());
+        DefaultAvatarInitializer initializer = new DefaultAvatarInitializer(objectStorage, image.toString());
 
         initializer.run(null);
 
-        assertThat(storedKey.get()).isEqualTo(FileStorageService.DEFAULT_AVATAR_KEY);
-        assertThat(storedFileName.get()).isEqualTo(FileStorageService.DEFAULT_AVATAR_KEY + ".jpg");
+        assertThat(storedKey.get()).isEqualTo("avatars/" + FileStorageService.DEFAULT_AVATAR_KEY);
+        assertThat(storedLength.get()).isEqualTo(content.length);
         assertThat(storedContent.get()).isEqualTo(content);
+        assertThat(storedContentType.get()).isEqualTo("image/jpeg");
     }
 
     @Test
-    void run_missingFile_doesNotThrow() {
-        when(registry.get(ObjectManagerRegistry.NAMESPACE_AVATARS)).thenReturn(manager);
-
+    void run_missingFile_doesNotThrow() throws IOException {
         DefaultAvatarInitializer initializer = new DefaultAvatarInitializer(
-                registry, tempDir.resolve("missing.jpg").toString());
+                objectStorage, tempDir.resolve("missing.jpg").toString());
 
         assertThatCode(() -> initializer.run(null)).doesNotThrowAnyException();
-        verify(manager, never()).update(any(), any(), any());
-    }
-
-    @Test
-    void run_unknownNamespace_doesNotThrow() {
-        when(registry.get(ObjectManagerRegistry.NAMESPACE_AVATARS)).thenReturn(null);
-
-        DefaultAvatarInitializer initializer = new DefaultAvatarInitializer(
-                registry, tempDir.resolve("default_avatar.jpg").toString());
-
-        assertThatCode(() -> initializer.run(null)).doesNotThrowAnyException();
+        verify(objectStorage, never()).put(any(), any(), anyLong(), any());
     }
 
     @Test
     void run_storageFailure_doesNotThrow() throws IOException {
         Path image = tempDir.resolve("default_avatar.jpg");
         Files.write(image, new byte[]{1});
-        when(registry.get(ObjectManagerRegistry.NAMESPACE_AVATARS)).thenReturn(manager);
-        doThrow(new RuntimeException("storage unavailable")).when(manager).update(any(), any(), any());
+        doThrow(new RuntimeException("storage unavailable"))
+                .when(objectStorage).put(any(), any(), anyLong(), any());
 
-        DefaultAvatarInitializer initializer = new DefaultAvatarInitializer(registry, image.toString());
+        DefaultAvatarInitializer initializer = new DefaultAvatarInitializer(objectStorage, image.toString());
 
         assertThatCode(() -> initializer.run(null)).doesNotThrowAnyException();
     }

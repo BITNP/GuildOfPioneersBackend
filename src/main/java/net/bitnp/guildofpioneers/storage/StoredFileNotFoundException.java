@@ -12,4 +12,11 @@ public class StoredFileNotFoundException extends RuntimeException {
     public StoredFileNotFoundException(String namespace, String key) {
         super("File \"" + key + "\" does not exist in namespace \"" + namespace + "\"");
     }
+
+    /**
+     * @param objectKey the full slash-separated object key that is missing
+     */
+    public StoredFileNotFoundException(String objectKey) {
+        super("File \"" + objectKey + "\" does not exist");
+    }
 }

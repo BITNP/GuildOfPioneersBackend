@@ -1,24 +1,15 @@
 package net.bitnp.guildofpioneers.storage;
 
-import com.potato.object.ObjectData;
-import com.potato.object.ObjectManager;
-import com.potato.object.ObjectReference;
-import com.potato.object.ObjectStatement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.List;
 
 /**
- * Stores, retrieves, and deletes files through the Veil library.
+ * Stores, retrieves, and deletes files through the injected {@link ObjectStorage}.
  *
  * <p>Provides generic namespace/key based operations plus avatar-specific convenience
  * methods. Stored files are exposed under the public {@code /uploads/} prefix.</p>
@@ -30,29 +21,36 @@ public class FileStorageService {
 
     private static final String PUBLIC_PREFIX = "/uploads/";
 
+    public static final String NAMESPACE_AVATARS = "avatars";
+    public static final String NAMESPACE_PROJECT_COVERS = "project_covers";
+
     /**
      * Reserved key under which the default avatar is stored in the {@code avatars}
      * namespace. Users without their own avatar fall back to this object.
      */
     public static final String DEFAULT_AVATAR_KEY = "default";
 
-    private final ObjectManagerRegistry registry;
+    private final ObjectStorage objectStorage;
     private final AvatarFileTypeHandler avatarFileTypeHandler;
-    private final Path uploadDir;
 
     /**
-     * @param registry              the namespace managers
+     * @param objectStorage         the injected storage backend
      * @param avatarFileTypeHandler resolves accepted avatar image types
-     * @param uploadDir             the root directory that stored files are resolved against
      */
-    public FileStorageService(
-            ObjectManagerRegistry registry,
-            AvatarFileTypeHandler avatarFileTypeHandler,
-            @Value("${app.upload-dir:./uploads}") String uploadDir
-    ) {
-        this.registry = registry;
+    public FileStorageService(ObjectStorage objectStorage, AvatarFileTypeHandler avatarFileTypeHandler) {
+        this.objectStorage = objectStorage;
         this.avatarFileTypeHandler = avatarFileTypeHandler;
-        this.uploadDir = Paths.get(uploadDir).toAbsolutePath().normalize();
+    }
+
+    /**
+     * Builds the object key used by the storage backend.
+     *
+     * @param namespace the namespace of the object
+     * @param key       the object key within the namespace
+     * @return the full slash-separated object key
+     */
+    public static String objectKey(String namespace, String key) {
+        return namespace + "/" + key;
     }
 
     /**
@@ -64,7 +62,7 @@ public class FileStorageService {
      * @throws InvalidFileTypeException if the file is empty or not a supported image type
      */
     public String storeAvatar(MultipartFile file, Long userId) {
-        return store(ObjectManagerRegistry.NAMESPACE_AVATARS, String.valueOf(userId), file, avatarFileTypeHandler);
+        return store(NAMESPACE_AVATARS, String.valueOf(userId), file, avatarFileTypeHandler);
     }
 
     /**
@@ -76,7 +74,7 @@ public class FileStorageService {
      * @throws InvalidFileTypeException if the file is empty or not a supported image type
      */
     public String storeProjectCover(MultipartFile file, Long projectId) {
-        return store(ObjectManagerRegistry.NAMESPACE_PROJECT_COVERS, String.valueOf(projectId), file, avatarFileTypeHandler);
+        return store(NAMESPACE_PROJECT_COVERS, String.valueOf(projectId), file, avatarFileTypeHandler);
     }
 
     /**
@@ -97,15 +95,13 @@ public class FileStorageService {
         if (extension == null) {
             throw new InvalidFileTypeException("Unsupported file type: " + file.getContentType());
         }
-        String fileName = key + "." + extension;
-        ObjectStatement statement = ObjectStatement.builder().key(key).build();
         try (InputStream source = file.getInputStream()) {
-            requireManager(namespace).update(statement, fileName, source);
+            objectStorage.put(objectKey(namespace, key), source, file.getSize(), file.getContentType());
         } catch (IOException ex) {
-            log.error("Failed to read upload for {} key {} in {}", namespace, key, uploadDir, ex);
+            log.error("Failed to read upload for {} key {} from object storage", namespace, key, ex);
             throw new IllegalStateException("Failed to store file", ex);
         }
-        log.info("Stored file {}/{}", namespace, fileName);
+        log.info("Stored file {}/{}", namespace, key);
         return PUBLIC_PREFIX + namespace + "/" + key;
     }
 
@@ -118,16 +114,8 @@ public class FileStorageService {
      * @return the object's metadata and content stream
      * @throws StoredFileNotFoundException if no object with the given key exists
      */
-    public ObjectData get(String namespace, String key) {
-        ObjectManager manager = registry.get(namespace);
-        if (manager == null) {
-            throw new StoredFileNotFoundException(namespace, key);
-        }
-        try {
-            return manager.get(ObjectStatement.builder().key(key).build());
-        } catch (IllegalArgumentException ex) {
-            throw new StoredFileNotFoundException(namespace, key);
-        }
+    public StoredObject get(String namespace, String key) {
+        return objectStorage.get(objectKey(namespace, key));
     }
 
     /**
@@ -137,78 +125,46 @@ public class FileStorageService {
      * @param key       the object key
      */
     public void delete(String namespace, String key) {
-        ObjectManager manager = registry.get(namespace);
-        if (manager == null) {
-            return;
-        }
-        try {
-            manager.remove(ObjectStatement.builder().key(key).build());
-        } catch (IllegalArgumentException ex) {
-            log.warn("Attempted to delete missing file {}/{}", namespace, key);
-        }
+        objectStorage.delete(objectKey(namespace, key));
     }
 
     /**
      * Returns the public URL of the user's avatar, falling back to the default avatar
      * when the user has no stored avatar. A cache-busting {@code ?v=} version is
-     * appended when the file's last-modified timestamp is available.
+     * appended when the object's version marker is available.
      *
      * @param userId the owning user's id
      * @return the user's avatar URL, or the default avatar URL if the user has none
      */
     public String avatarUrl(Long userId) {
-        String userUrl = urlFor(ObjectManagerRegistry.NAMESPACE_AVATARS, String.valueOf(userId));
+        String userUrl = urlFor(NAMESPACE_AVATARS, String.valueOf(userId));
         if (userUrl != null) {
             return userUrl;
         }
-        String defaultUrl = urlFor(ObjectManagerRegistry.NAMESPACE_AVATARS, DEFAULT_AVATAR_KEY);
+        String defaultUrl = urlFor(NAMESPACE_AVATARS, DEFAULT_AVATAR_KEY);
         return defaultUrl != null
                 ? defaultUrl
-                : PUBLIC_PREFIX + ObjectManagerRegistry.NAMESPACE_AVATARS + "/" + DEFAULT_AVATAR_KEY;
+                : PUBLIC_PREFIX + NAMESPACE_AVATARS + "/" + DEFAULT_AVATAR_KEY;
     }
 
     /**
      * Returns the public URL of the project's cover image, or {@code null} if the
      * project has no cover. A cache-busting {@code ?v=} version is appended when the
-     * file's last-modified timestamp is available.
+     * object's version marker is available.
      *
      * @param projectId the owning project's id
      * @return the cover URL, or {@code null} if no cover exists
      */
     public String projectCoverUrl(Long projectId) {
-        return urlFor(ObjectManagerRegistry.NAMESPACE_PROJECT_COVERS, String.valueOf(projectId));
+        return urlFor(NAMESPACE_PROJECT_COVERS, String.valueOf(projectId));
     }
 
     private String urlFor(String namespace, String key) {
-        ObjectReference reference = find(namespace, key);
-        if (reference == null) {
+        ObjectInfo info = objectStorage.head(objectKey(namespace, key));
+        if (info == null) {
             return null;
         }
         String base = PUBLIC_PREFIX + namespace + "/" + key;
-        Path file = uploadDir.resolve(reference.metadata().storageLocation()).normalize();
-        try {
-            return base + "?v=" + Files.getLastModifiedTime(file).toMillis();
-        } catch (IOException ex) {
-            log.warn("Failed to read file timestamp {}", file, ex);
-            return base;
-        }
-    }
-
-    private ObjectReference find(String namespace, String key) {
-        ObjectManager manager = registry.get(namespace);
-        if (manager == null) {
-            return null;
-        }
-        List<ObjectReference> matches = manager.query(
-                ObjectStatement.builder().where("key", ObjectStatement.Op.EQ, key).build());
-        return matches.isEmpty() ? null : matches.get(0);
-    }
-
-    private ObjectManager requireManager(String namespace) {
-        ObjectManager manager = registry.get(namespace);
-        if (manager == null) {
-            throw new IllegalArgumentException("Unknown storage namespace: " + namespace);
-        }
-        return manager;
+        return info.version() == null ? base : base + "?v=" + info.version();
     }
 }
