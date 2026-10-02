@@ -189,9 +189,7 @@ public class UserService {
     }
 
     private User findByAuthentication(Authentication authentication) {
-        String username = authentication.getName();
-        return userRepository.findByUserNameIgnoreCase(username)
-                .orElseThrow(() -> new UserNotFoundException(username));
+        return permissionService.currentUser(authentication);
     }
 
     private AuthResponse toResponse(User user) {

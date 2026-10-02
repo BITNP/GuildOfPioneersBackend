@@ -10,7 +10,7 @@ description = "GuildOfPioneersBackend"
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(providers.gradleProperty("buildJavaVersion").orElse("17").get().toInt())
     }
 }
 
@@ -23,6 +23,7 @@ dependencies {
     // implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.springframework.boot:spring-boot-starter-security")
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-client")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
     implementation("org.flywaydb:flyway-database-postgresql")
@@ -46,4 +47,9 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+}
+
+// A newer local JDK may run the build while keeping the deployment target at Java 17.
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(17)
 }

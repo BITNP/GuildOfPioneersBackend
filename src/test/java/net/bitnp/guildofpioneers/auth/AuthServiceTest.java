@@ -1,11 +1,12 @@
 package net.bitnp.guildofpioneers.auth;
 
-import net.bitnp.guildofpioneers.common.PermissionService;
+import net.bitnp.guildofpioneers.auth.dto.RegisterRequest;
+
+import net.bitnp.guildofpioneers.auth.service.AuthService;
+
 import net.bitnp.guildofpioneers.ticket.RegistrationTicket;
 import net.bitnp.guildofpioneers.ticket.RegistrationTicketService;
 import net.bitnp.guildofpioneers.ticket.TicketExpiredException;
-import net.bitnp.guildofpioneers.user.AuthResponse;
-import net.bitnp.guildofpioneers.user.UserDepartmentDto;
 import net.bitnp.guildofpioneers.user.entity.Department;
 import net.bitnp.guildofpioneers.user.entity.DepartmentRole;
 import net.bitnp.guildofpioneers.user.entity.User;
@@ -14,154 +15,88 @@ import net.bitnp.guildofpioneers.user.exception.PhoneAlreadyExistsException;
 import net.bitnp.guildofpioneers.user.exception.UserNameAlreadyExistsException;
 import net.bitnp.guildofpioneers.user.repository.UserDepartmentRepository;
 import net.bitnp.guildofpioneers.user.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.crypto.password.PasswordEncoder;
-
-import java.time.Instant;
-import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import java.util.Optional;
+import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
-/**
- * Unit tests for {@link AuthService}.
- */
+/** Admission rules remain local and never trust provider profile claims. */
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
+    @Mock UserRepository users;
+    @Mock UserDepartmentRepository departments;
+    @Mock RegistrationTicketService tickets;
+    @Mock OidcIdentityRepository identities;
+    AuthService service;
+    GuildOidcUser principal = OidcTestUsers.principal(null, "new-subject");
+    RegisterRequest request = RegisterRequest.builder().userName("Alice").phone("13800000000")
+            .email("alice@example.com").ticketCode("VALIDCODE123").build();
 
-    @Mock
-    private UserRepository userRepository;
-
-    @Mock
-    private PasswordEncoder passwordEncoder;
-
-    @Mock
-    private RegistrationTicketService registrationTicketService;
-
-    @Mock
-    private UserDepartmentRepository userDepartmentRepository;
-
-    @Mock
-    private PermissionService permissionService;
-
-    @InjectMocks
-    private AuthService authService;
-
-    private RegistrationTicket ticket(String code) {
-        return RegistrationTicket.builder()
-                .code(code)
-                .expiresAt(Instant.now().plusSeconds(3600))
-                .department(Department.TECH)
-                .role(DepartmentRole.MEMBER)
-                .build();
+    @BeforeEach void setUp() {
+        service = new AuthService(users, tickets, departments, identities,
+                new OidcProperties(OidcTestUsers.ISSUER, "test", "secret", "http://localhost:5173", "bootstrap"));
     }
 
-    @Test
-    void register_encodesPasswordAndSavesUser() {
-        when(passwordEncoder.encode("secret123")).thenReturn("encoded-hash");
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+    @Test void grantsTicketMembershipAndCreatesNoPassword() {
+        when(tickets.findByCode("VALIDCODE123")).thenReturn(RegistrationTicket.builder()
+                .department(Department.TECH).role(DepartmentRole.MEMBER).build());
+        when(users.saveAndFlush(any())).thenAnswer(invocation -> {
             User user = invocation.getArgument(0);
-            user.setId(1L);
+            user.setId(7L);
             return user;
         });
-        when(registrationTicketService.findByCode("VALIDCODE123")).thenReturn(ticket("VALIDCODE123"));
-        when(userDepartmentRepository.save(any(UserDepartment.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-        when(userDepartmentRepository.findByUserId(1L)).thenReturn(List.of(
-                UserDepartment.builder()
-                        .id(10L)
-                        .userId(1L)
-                        .department(Department.TECH)
-                        .role(DepartmentRole.MEMBER)
-                        .build()
-        ));
-        when(permissionService.isManager(any(User.class))).thenReturn(false);
-
-        RegisterRequest request = RegisterRequest.builder()
-                .phone("13800000000")
-                .password("secret123")
-                .userName("Alice")
-                .ticketCode("VALIDCODE123")
-                .email("alice@example.com")
-                .build();
-
-        AuthResponse response = authService.register(request);
-
-        verify(registrationTicketService).validate("VALIDCODE123");
-        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-        verify(userRepository).save(userCaptor.capture());
-        assertThat(userCaptor.getValue().getPassword()).isEqualTo("encoded-hash");
-        assertThat(userCaptor.getValue().getEmail()).isEqualTo("alice@example.com");
-
-        ArgumentCaptor<UserDepartment> membershipCaptor = ArgumentCaptor.forClass(UserDepartment.class);
-        verify(userDepartmentRepository).save(membershipCaptor.capture());
-        assertThat(membershipCaptor.getValue().getUserId()).isEqualTo(1L);
-        assertThat(membershipCaptor.getValue().getDepartment()).isEqualTo(Department.TECH);
-        assertThat(membershipCaptor.getValue().getRole()).isEqualTo(DepartmentRole.MEMBER);
-
-        assertThat(response.getId()).isEqualTo(1L);
-        assertThat(response.getPhone()).isEqualTo("13800000000");
-        assertThat(response.getDepartments())
-                .extracting(UserDepartmentDto::getDepartment)
-                .containsExactly(Department.TECH);
-        assertThat(response.getDepartments())
-                .extracting(UserDepartmentDto::getRole)
-                .containsExactly(DepartmentRole.MEMBER);
-        assertThat(response.getIsManager()).isFalse();
+        assertThat(service.register(request, principal)).isEqualTo(7L);
+        var user = ArgumentCaptor.forClass(User.class);
+        verify(users).saveAndFlush(user.capture());
+        assertThat(user.getValue().getPassword()).isNull();
+        var membership = ArgumentCaptor.forClass(UserDepartment.class);
+        verify(departments).save(membership.capture());
+        assertThat(membership.getValue().getDepartment()).isEqualTo(Department.TECH);
+        assertThat(membership.getValue().getRole()).isEqualTo(DepartmentRole.MEMBER);
+        var binding = ArgumentCaptor.forClass(OidcIdentity.class);
+        verify(identities).saveAndFlush(binding.capture());
+        assertThat(binding.getValue().getSubject()).isEqualTo("new-subject");
+        assertThat(binding.getValue().getUserId()).isEqualTo(7L);
     }
 
-    @Test
-    void register_rejectsDuplicatePhone() {
-        when(userRepository.existsByPhone("13800000000")).thenReturn(true);
-
-        RegisterRequest request = RegisterRequest.builder()
-                .phone("13800000000")
-                .password("secret123")
-                .userName("Alice")
-                .ticketCode("VALIDCODE123")
-                .build();
-
-        assertThatThrownBy(() -> authService.register(request))
-                .isInstanceOf(PhoneAlreadyExistsException.class);
+    @Test void rejectsDuplicatePhone() {
+        when(tickets.findByCode(any())).thenReturn(RegistrationTicket.builder().department(Department.TECH).role(DepartmentRole.MEMBER).build());
+        when(users.existsByPhone(request.getPhone())).thenReturn(true);
+        assertThatThrownBy(() -> service.register(request, principal)).isInstanceOf(PhoneAlreadyExistsException.class);
+        verify(users, never()).saveAndFlush(any());
     }
 
-    @Test
-    void register_rejectsDuplicateUserName() {
-        when(userRepository.existsByUserNameIgnoreCase("Alice")).thenReturn(true);
-
-        RegisterRequest request = RegisterRequest.builder()
-                .phone("13900000000")
-                .password("secret123")
-                .userName("Alice")
-                .ticketCode("VALIDCODE123")
-                .build();
-
-        assertThatThrownBy(() -> authService.register(request))
-                .isInstanceOf(UserNameAlreadyExistsException.class);
+    @Test void rejectsDuplicateUserName() {
+        when(tickets.findByCode(any())).thenReturn(RegistrationTicket.builder().department(Department.TECH).role(DepartmentRole.MEMBER).build());
+        when(users.existsByUserNameIgnoreCase("Alice")).thenReturn(true);
+        assertThatThrownBy(() -> service.register(request, principal)).isInstanceOf(UserNameAlreadyExistsException.class);
     }
 
-    @Test
-    void register_rejectsExpiredTicket() {
-        doThrow(new TicketExpiredException("EXPIRED123")).when(registrationTicketService)
-                .validate("EXPIRED123");
+    @Test void rejectsExpiredTicketBeforeCreatingAnAccount() {
+        doThrow(new TicketExpiredException("VALIDCODE123")).when(tickets).validate("VALIDCODE123");
+        assertThatThrownBy(() -> service.register(request, principal)).isInstanceOf(TicketExpiredException.class);
+        verify(users, never()).saveAndFlush(any());
+    }
 
-        RegisterRequest request = RegisterRequest.builder()
-                .phone("13800000000")
-                .password("secret123")
-                .userName("Alice")
-                .ticketCode("EXPIRED123")
-                .build();
+    @Test void boundIdentityCannotRegisterAgainOrAcquireNewMembership() {
+        when(identities.findByIssuerAndSubject(OidcTestUsers.ISSUER, "new-subject"))
+                .thenReturn(Optional.of(new OidcIdentity(7L, OidcTestUsers.ISSUER, "new-subject")));
+        assertThatThrownBy(() -> service.register(request, principal)).isInstanceOf(IdentityConflictException.class);
+        verifyNoInteractions(tickets);
+    }
 
-        assertThatThrownBy(() -> authService.register(request))
-                .isInstanceOf(TicketExpiredException.class);
+    @Test void bootstrapRequiresExactIdentityAndNoExistingAdministrator() {
+        assertThat(service.isBootstrapAdmin(principal)).isFalse();
+        GuildOidcUser bootstrap = OidcTestUsers.principal(null, "bootstrap");
+        assertThat(service.isBootstrapAdmin(bootstrap)).isTrue();
+        assertThat(service.isBootstrapAdmin(bootstrap.withUserId(7L))).isFalse();
+        when(departments.existsByDepartment(Department.ADMIN)).thenReturn(true);
+        assertThat(service.isBootstrapAdmin(bootstrap)).isFalse();
     }
 }

@@ -1,5 +1,7 @@
 package net.bitnp.guildofpioneers.storage;
 
+import net.bitnp.guildofpioneers.auth.service.OidcIdentityService;
+
 import net.bitnp.guildofpioneers.config.SecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +24,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(FileController.class)
 @Import(SecurityConfig.class)
 class FileControllerTest {
+
+    @MockitoBean
+    private net.bitnp.guildofpioneers.auth.service.OidcIdentityService oidcIdentityService;
 
     @Autowired
     private MockMvc mockMvc;

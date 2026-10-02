@@ -1,75 +1,67 @@
 # GuildOfPioneers
 
-Spring Boot backend for Guild of Pioneers.
+Spring Boot backend for Guild of Pioneers, using Keycloak OIDC authentication and site-owned membership and project permissions.
 
 ## Requirements
 
-- JDK 17
-- Docker
-- `POSTGRES_PASSWORD`, `RUSTFS_ACCESS_KEY`, and `RUSTFS_SECRET_KEY` environment
-  variables (used by the database and object-storage containers)
+- JDK 17, or a newer installed JDK with `-PbuildJavaVersion=<major>` (output remains Java 17 compatible).
+- PostgreSQL and S3-compatible object storage; Docker Compose can provide PostgreSQL and RustFS.
+- An existing Keycloak realm and confidential OIDC client.
 
-An example env file is provided in `.env.example`. Copy it to `.env` and adjust
-the values:
+See [Keycloak configuration and account migration](docs/keycloak-setup.md) before rollout. Existing administrators and users must be explicitly bound to their Keycloak identities; there is no local password login.
 
-```bash
-cp .env.example .env
-```
+## Run with Docker
 
-## Run with Docker (backend + Postgres + RustFS)
+Copy `.env.example` to `.env`, fill the DB/storage secrets, OIDC settings and public site URL, then run:
 
 ```bash
 docker compose up -d --build
 ```
 
-The backend is served at `http://localhost:8080`. Health check:
-`http://localhost:8080/actuator/health`. The RustFS console is served at
-`http://localhost:9001`.
+The backend binds `127.0.0.1:8080`; health is `/actuator/health`. The frontend proxies `/api/` to it. The RustFS console uses port 9001.
 
-## Run with Gradle (Postgres + RustFS only via Docker)
+## Run with local tools
 
-Start just the infrastructure:
-
-```bash
-docker compose up -d postgres rustfs
-```
-
-Then run the backend with the default profile (expects `jdbc:postgresql://localhost:5432/guild`,
-user `guild`, password `guild`, and RustFS on `http://localhost:9000`):
+With PostgreSQL on localhost and configured storage/OIDC environment variables:
 
 ```bash
 ./gradlew bootRun
+./gradlew test
 ```
 
-Or run against the prod profile (requires the same env vars used in `docker-compose.yml`):
+For a machine with Java 25 instead of Java 17:
 
 ```bash
-export POSTGRES_PASSWORD=guild
-export ADMIN_PASSWORD=password123
-export RUSTFS_ACCESS_KEY=dev-access-key
-export RUSTFS_SECRET_KEY=dev-secret-key-change-me
-docker compose up -d postgres rustfs
-./gradlew bootRun --args='--spring.profiles.active=prod' \
-  -Dspring-boot.run.jvmArguments="-DDB_URL=jdbc:postgresql://localhost:5432/guild -DDB_USERNAME=guild -DDB_PASSWORD=guild -DAPP_ADMIN_PASSWORD=$ADMIN_PASSWORD -DS3_ENDPOINT=http://localhost:9000 -DS3_ACCESS_KEY=$RUSTFS_ACCESS_KEY -DS3_SECRET_KEY=$RUSTFS_SECRET_KEY"
+./gradlew -PbuildJavaVersion=25 bootRun
+./gradlew -PbuildJavaVersion=25 test
 ```
 
-## Key environment variables
+The development public URL defaults to `http://localhost:5173`; supply the actual realm, client ID and secret. Production requires explicit DB, storage and OIDC values. Default avatar initialization can be disabled with `APP_DEFAULT_AVATAR_ENABLED=false`.
+
+## Environment variables
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `POSTGRES_PASSWORD` | (required) | Postgres password |
-| `DB_URL` | `jdbc:postgresql://localhost:5432/guild` (dev profile) | JDBC URL |
-| `DB_USERNAME` | `guild` | Database user |
-| `DB_PASSWORD` | `guild` (dev profile) | Database password |
-| `APP_ADMIN_PASSWORD` | `password123` (dev profile), required in prod | Initial admin password |
-| `APP_SEED_DATA` | `true` (dev) / `false` (prod) | Seed demo data |
-| `APP_DEFAULT_AVATAR` | `./default_avatar.jpg` | Source image imported as the default avatar |
+| `OIDC_ISSUER` | localhost realm in dev; required in prod | Exact Keycloak realm issuer |
+| `OIDC_CLIENT_ID` | `guild-backend` in dev; required in prod | Confidential client ID |
+| `OIDC_CLIENT_SECRET` | placeholder in dev; required in prod | Client secret |
+| `APP_PUBLIC_URL` | `http://localhost:5173` in dev; required in prod | Public frontend origin |
+| `OIDC_BOOTSTRAP_ADMIN_SUBJECT` | empty | Explicit first administrator identity for a new deployment |
+| `APP_SESSION_TIMEOUT` | `30m` | Local session inactivity timeout |
+| `APP_SECURE_COOKIE` | false in dev / true in prod | Use Secure session cookies |
+| `POSTGRES_PASSWORD` | required by compose | PostgreSQL container password |
+| `DB_URL` | `jdbc:postgresql://localhost:5432/guild` in dev | JDBC URL |
+| `DB_USERNAME` | `guild` in dev | Database user |
+| `DB_PASSWORD` | `guild` in dev | Database password |
+| `APP_SEED_DATA` | `false` | Opt in to unbound development data |
+| `APP_DEFAULT_AVATAR` | `./default_avatar.jpg` | Default avatar source image |
 | `APP_TIMEZONE` | `UTC+8` | Application timezone |
-| `STORAGE_TYPE` | `s3` | Storage backend, `s3` or `memory` |
-| `S3_ENDPOINT` | `http://localhost:9000` (dev profile), required in prod | S3-compatible endpoint URL |
-| `S3_REGION` | `us-east-1` | S3 region (required by the client even for RustFS) |
-| `S3_ACCESS_KEY` | (required with `S3_SECRET_KEY`) | S3 access key |
-| `S3_SECRET_KEY` | (required with `S3_ACCESS_KEY`) | S3 secret key |
-| `S3_BUCKET` | `guild` | Bucket that stores all objects |
-| `S3_PATH_STYLE` | `true` | Use path-style bucket addressing (required by RustFS) |
-| `S3_CREATE_BUCKET` | `true` | Create the bucket at startup when missing |
+| `STORAGE_TYPE` | `s3` | Storage backend: `s3` or `memory` |
+| `S3_ENDPOINT` | `http://localhost:9000` in dev | S3-compatible endpoint |
+| `S3_REGION` | `us-east-1` | Region used by the client |
+| `S3_ACCESS_KEY`, `S3_SECRET_KEY` | required for S3 | Storage credentials |
+| `S3_BUCKET` | `guild` | Object bucket |
+| `S3_PATH_STYLE` | `true` | Path-style addressing for RustFS |
+| `S3_CREATE_BUCKET` | `true` | Create bucket if missing |
+
+[API contract](doc/API.md) · [Domain glossary](CONTEXT.md) · [OIDC design](docs/keycloak-oidc-design.md)

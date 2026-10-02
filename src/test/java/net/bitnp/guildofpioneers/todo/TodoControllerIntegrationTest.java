@@ -36,7 +36,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -47,6 +46,7 @@ import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.startsWith;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -76,9 +76,6 @@ class TodoControllerIntegrationTest {
 
     @Autowired
     private UserDepartmentRepository userDepartmentRepository;
-
-    @Autowired
-    private PasswordEncoder passwordEncoder;
 
     @Autowired
     private TodoProjectRepository projectRepository;
@@ -127,13 +124,13 @@ class TodoControllerIntegrationTest {
                 .userName(USERNAME)
                 .phone(PHONE)
                 .email("alice@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         member = userRepository.save(User.builder()
                 .userName("Bob")
                 .phone("13000000001")
                 .email("bob@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
 
         project = projectRepository.save(TodoProject.builder()
@@ -174,17 +171,7 @@ class TodoControllerIntegrationTest {
                 .id(new TodoActionMemberKey(action.getId(), member.getId()))
                 .build());
 
-        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "username": "%s",
-                                  "password": "%s"
-                                }
-                                """.formatted(USERNAME, PASSWORD)))
-                .andExpect(status().isOk())
-                .andReturn();
-        session = (MockHttpSession) loginResult.getRequest().getSession();
+        session = net.bitnp.guildofpioneers.auth.OidcTestUsers.session(userRepository.findByUserNameIgnoreCase(USERNAME).orElseThrow().getId());
     }
 
     @Test
@@ -297,7 +284,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void leaderUpdatesProject_returnsUpdatedProject() throws Exception {
-        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId()).with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -318,7 +305,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void leaderUpdatesProject_clearsBlankDescription() throws Exception {
-        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId()).with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -336,7 +323,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void leaderUpdatesProject_replacesLeadersAndMembers() throws Exception {
-        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId()).with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -355,7 +342,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void updateProject_absentLists_leaveMembershipUnchanged() throws Exception {
-        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId()).with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -371,7 +358,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void updateProject_withOverlappingLists_returnsBadRequest() throws Exception {
-        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId()).with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -386,7 +373,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void updateProject_withUnknownUser_returnsBadRequest() throws Exception {
-        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId()).with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -401,7 +388,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void updateProject_withBlankTitle_returnsBadRequest() throws Exception {
-        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId()).with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -415,19 +402,9 @@ class TodoControllerIntegrationTest {
 
     @Test
     void updateProject_byNonLeader_returnsForbidden() throws Exception {
-        MvcResult memberLogin = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "username": "Bob",
-                                  "password": "%s"
-                                }
-                                """.formatted(PASSWORD)))
-                .andExpect(status().isOk())
-                .andReturn();
-        MockHttpSession memberSession = (MockHttpSession) memberLogin.getRequest().getSession();
+        MockHttpSession memberSession = net.bitnp.guildofpioneers.auth.OidcTestUsers.session(userRepository.findByUserNameIgnoreCase("Bob").orElseThrow().getId());
 
-        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId()).with(csrf())
                         .session(memberSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -445,7 +422,7 @@ class TodoControllerIntegrationTest {
                 .userName("Admin")
                 .phone("13000000002")
                 .email("admin@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         userDepartmentRepository.save(UserDepartment.builder()
                 .userId(admin.getId())
@@ -453,19 +430,9 @@ class TodoControllerIntegrationTest {
                 .role(DepartmentRole.LEADER)
                 .build());
 
-        MvcResult adminLogin = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "username": "Admin",
-                                  "password": "%s"
-                                }
-                                """.formatted(PASSWORD)))
-                .andExpect(status().isOk())
-                .andReturn();
-        MockHttpSession adminSession = (MockHttpSession) adminLogin.getRequest().getSession();
+        MockHttpSession adminSession = net.bitnp.guildofpioneers.auth.OidcTestUsers.session(userRepository.findByUserNameIgnoreCase("Admin").orElseThrow().getId());
 
-        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId()).with(csrf())
                         .session(adminSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -484,7 +451,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void updateProject_missingProject_returnsNotFound() throws Exception {
-        mockMvc.perform(put("/api/todo/projects/{projectId}", 9999L)
+        mockMvc.perform(put("/api/todo/projects/{projectId}", 9999L).with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -498,7 +465,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void updateProject_unauthenticatedRequest_isRejected() throws Exception {
-        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId())
+        mockMvc.perform(put("/api/todo/projects/{projectId}", project.getId()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -520,7 +487,7 @@ class TodoControllerIntegrationTest {
         User manager = createManagerUser("Manager", "13000000003");
         MockHttpSession managerSession = login(manager);
 
-        mockMvc.perform(post("/api/todo/projects")
+        mockMvc.perform(post("/api/todo/projects").with(csrf())
                         .session(managerSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -544,7 +511,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void createProject_byNonManager_returnsForbidden() throws Exception {
-        mockMvc.perform(post("/api/todo/projects")
+        mockMvc.perform(post("/api/todo/projects").with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -561,7 +528,7 @@ class TodoControllerIntegrationTest {
     void createProject_withOverlappingLeaderAndMember_returnsBadRequest() throws Exception {
         MockHttpSession managerSession = createManagerSession("Manager", "13000000003");
 
-        mockMvc.perform(post("/api/todo/projects")
+        mockMvc.perform(post("/api/todo/projects").with(csrf())
                         .session(managerSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -579,7 +546,7 @@ class TodoControllerIntegrationTest {
         User manager = createManagerUser("Manager", "13000000003");
         MockHttpSession managerSession = login(manager);
 
-        mockMvc.perform(post("/api/todo/projects")
+        mockMvc.perform(post("/api/todo/projects").with(csrf())
                         .session(managerSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -596,7 +563,7 @@ class TodoControllerIntegrationTest {
     void createProject_withUnknownUser_returnsBadRequest() throws Exception {
         MockHttpSession managerSession = createManagerSession("Manager", "13000000003");
 
-        mockMvc.perform(post("/api/todo/projects")
+        mockMvc.perform(post("/api/todo/projects").with(csrf())
                         .session(managerSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -613,7 +580,7 @@ class TodoControllerIntegrationTest {
     void createProject_withBlankTitle_returnsBadRequest() throws Exception {
         MockHttpSession managerSession = createManagerSession("Manager", "13000000003");
 
-        mockMvc.perform(post("/api/todo/projects")
+        mockMvc.perform(post("/api/todo/projects").with(csrf())
                         .session(managerSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -628,7 +595,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void createProject_unauthenticatedRequest_isRejected() throws Exception {
-        mockMvc.perform(post("/api/todo/projects")
+        mockMvc.perform(post("/api/todo/projects").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -642,22 +609,12 @@ class TodoControllerIntegrationTest {
 
     @Test
     void uploadProjectCover_byNonLeader_returnsForbidden() throws Exception {
-        MvcResult memberLogin = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "username": "Bob",
-                                  "password": "%s"
-                                }
-                                """.formatted(PASSWORD)))
-                .andExpect(status().isOk())
-                .andReturn();
-        MockHttpSession memberSession = (MockHttpSession) memberLogin.getRequest().getSession();
+        MockHttpSession memberSession = net.bitnp.guildofpioneers.auth.OidcTestUsers.session(userRepository.findByUserNameIgnoreCase("Bob").orElseThrow().getId());
         MockMultipartFile cover = new MockMultipartFile(
                 "file", "cover.png", MediaType.IMAGE_PNG_VALUE, new byte[]{1}
         );
 
-        mockMvc.perform(multipart(HttpMethod.PUT, "/api/todo/projects/{projectId}/cover", project.getId())
+        mockMvc.perform(multipart(HttpMethod.PUT, "/api/todo/projects/{projectId}/cover", project.getId()).with(csrf())
                         .file(cover)
                         .session(memberSession))
                 .andExpect(status().isForbidden());
@@ -670,7 +627,7 @@ class TodoControllerIntegrationTest {
                 "file", "cover.png", MediaType.IMAGE_PNG_VALUE, new byte[]{1}
         );
 
-        mockMvc.perform(multipart(HttpMethod.PUT, "/api/todo/projects/{projectId}/cover", 9999L)
+        mockMvc.perform(multipart(HttpMethod.PUT, "/api/todo/projects/{projectId}/cover", 9999L).with(csrf())
                         .file(cover)
                         .session(managerSession))
                 .andExpect(status().isNotFound());
@@ -678,19 +635,9 @@ class TodoControllerIntegrationTest {
 
     @Test
     void createTask_byProjectMember_returnsCreatedTaskWithCreatorAsLeader() throws Exception {
-        MvcResult memberLogin = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "username": "Bob",
-                                  "password": "%s"
-                                }
-                                """.formatted(PASSWORD)))
-                .andExpect(status().isOk())
-                .andReturn();
-        MockHttpSession memberSession = (MockHttpSession) memberLogin.getRequest().getSession();
+        MockHttpSession memberSession = net.bitnp.guildofpioneers.auth.OidcTestUsers.session(userRepository.findByUserNameIgnoreCase("Bob").orElseThrow().getId());
 
-        mockMvc.perform(post("/api/todo/tasks")
+        mockMvc.perform(post("/api/todo/tasks").with(csrf())
                         .session(memberSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -719,21 +666,11 @@ class TodoControllerIntegrationTest {
                 .userName("Carol")
                 .phone("13000000004")
                 .email("carol@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
-        MvcResult outsiderLogin = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "username": "Carol",
-                                  "password": "%s"
-                                }
-                                """.formatted(PASSWORD)))
-                .andExpect(status().isOk())
-                .andReturn();
-        MockHttpSession outsiderSession = (MockHttpSession) outsiderLogin.getRequest().getSession();
+        MockHttpSession outsiderSession = net.bitnp.guildofpioneers.auth.OidcTestUsers.session(userRepository.findByUserNameIgnoreCase("Carol").orElseThrow().getId());
 
-        mockMvc.perform(post("/api/todo/tasks")
+        mockMvc.perform(post("/api/todo/tasks").with(csrf())
                         .session(outsiderSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -749,7 +686,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void createTask_missingProject_returnsNotFound() throws Exception {
-        mockMvc.perform(post("/api/todo/tasks")
+        mockMvc.perform(post("/api/todo/tasks").with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -765,7 +702,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void createTask_withBlankTitle_returnsBadRequest() throws Exception {
-        mockMvc.perform(post("/api/todo/tasks")
+        mockMvc.perform(post("/api/todo/tasks").with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -781,7 +718,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void createTask_withOverlappingLeaderAndMember_returnsBadRequest() throws Exception {
-        mockMvc.perform(post("/api/todo/tasks")
+        mockMvc.perform(post("/api/todo/tasks").with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -801,10 +738,10 @@ class TodoControllerIntegrationTest {
                 .userName("Carol")
                 .phone("13000000004")
                 .email("carol@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
 
-        mockMvc.perform(post("/api/todo/tasks")
+        mockMvc.perform(post("/api/todo/tasks").with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -824,7 +761,7 @@ class TodoControllerIntegrationTest {
                 .userName("Admin")
                 .phone("13000000002")
                 .email("admin@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         userDepartmentRepository.save(UserDepartment.builder()
                 .userId(admin.getId())
@@ -835,11 +772,11 @@ class TodoControllerIntegrationTest {
                 .userName("Carol")
                 .phone("13000000004")
                 .email("carol@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         MockHttpSession adminSession = login(admin);
 
-        mockMvc.perform(post("/api/todo/tasks")
+        mockMvc.perform(post("/api/todo/tasks").with(csrf())
                         .session(adminSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -855,7 +792,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void createTask_unauthenticatedRequest_isRejected() throws Exception {
-        mockMvc.perform(post("/api/todo/tasks")
+        mockMvc.perform(post("/api/todo/tasks").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -870,7 +807,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void updateTask_byTaskLeader_returnsUpdatedTask() throws Exception {
-        mockMvc.perform(put("/api/todo/tasks/{taskId}", task.getId())
+        mockMvc.perform(put("/api/todo/tasks/{taskId}", task.getId()).with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -892,7 +829,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void updateTask_replacesLeadersAndMembers() throws Exception {
-        mockMvc.perform(put("/api/todo/tasks/{taskId}", task.getId())
+        mockMvc.perform(put("/api/todo/tasks/{taskId}", task.getId()).with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -909,19 +846,9 @@ class TodoControllerIntegrationTest {
 
     @Test
     void updateTask_byNonTaskLeader_returnsForbidden() throws Exception {
-        MvcResult memberLogin = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "username": "Bob",
-                                  "password": "%s"
-                                }
-                                """.formatted(PASSWORD)))
-                .andExpect(status().isOk())
-                .andReturn();
-        MockHttpSession memberSession = (MockHttpSession) memberLogin.getRequest().getSession();
+        MockHttpSession memberSession = net.bitnp.guildofpioneers.auth.OidcTestUsers.session(userRepository.findByUserNameIgnoreCase("Bob").orElseThrow().getId());
 
-        mockMvc.perform(put("/api/todo/tasks/{taskId}", task.getId())
+        mockMvc.perform(put("/api/todo/tasks/{taskId}", task.getId()).with(csrf())
                         .session(memberSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -940,10 +867,10 @@ class TodoControllerIntegrationTest {
                 .userName("Carol")
                 .phone("13000000004")
                 .email("carol@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
 
-        mockMvc.perform(put("/api/todo/tasks/{taskId}", task.getId())
+        mockMvc.perform(put("/api/todo/tasks/{taskId}", task.getId()).with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -958,7 +885,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void updateTask_missingTask_returnsNotFound() throws Exception {
-        mockMvc.perform(put("/api/todo/tasks/{taskId}", 9999L)
+        mockMvc.perform(put("/api/todo/tasks/{taskId}", 9999L).with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -973,7 +900,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void updateTask_unauthenticatedRequest_isRejected() throws Exception {
-        mockMvc.perform(put("/api/todo/tasks/{taskId}", task.getId())
+        mockMvc.perform(put("/api/todo/tasks/{taskId}", task.getId()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -989,7 +916,7 @@ class TodoControllerIntegrationTest {
     void createAction_byTaskMember_returnsCreatedActionWithCreatorAsMember() throws Exception {
         MockHttpSession memberSession = login(member);
 
-        mockMvc.perform(post("/api/todo/actions")
+        mockMvc.perform(post("/api/todo/actions").with(csrf())
                         .session(memberSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -1018,11 +945,11 @@ class TodoControllerIntegrationTest {
                 .userName("Carol")
                 .phone("13000000004")
                 .email("carol@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         MockHttpSession outsiderSession = login(outsider);
 
-        mockMvc.perform(post("/api/todo/actions")
+        mockMvc.perform(post("/api/todo/actions").with(csrf())
                         .session(outsiderSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -1037,7 +964,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void createAction_missingTask_returnsNotFound() throws Exception {
-        mockMvc.perform(post("/api/todo/actions")
+        mockMvc.perform(post("/api/todo/actions").with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -1052,7 +979,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void createAction_withBlankTitle_returnsBadRequest() throws Exception {
-        mockMvc.perform(post("/api/todo/actions")
+        mockMvc.perform(post("/api/todo/actions").with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -1071,10 +998,10 @@ class TodoControllerIntegrationTest {
                 .userName("Carol")
                 .phone("13000000004")
                 .email("carol@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
 
-        mockMvc.perform(post("/api/todo/actions")
+        mockMvc.perform(post("/api/todo/actions").with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -1093,13 +1020,13 @@ class TodoControllerIntegrationTest {
                 .userName("Carol")
                 .phone("13000000004")
                 .email("carol@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         projectMemberRepository.save(TodoProjectMember.builder()
                 .id(new TodoProjectMemberKey(project.getId(), carol.getId()))
                 .build());
 
-        mockMvc.perform(post("/api/todo/actions")
+        mockMvc.perform(post("/api/todo/actions").with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -1123,7 +1050,7 @@ class TodoControllerIntegrationTest {
                 .userName("Admin")
                 .phone("13000000002")
                 .email("admin@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         userDepartmentRepository.save(UserDepartment.builder()
                 .userId(admin.getId())
@@ -1134,14 +1061,14 @@ class TodoControllerIntegrationTest {
                 .userName("Carol")
                 .phone("13000000004")
                 .email("carol@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         projectMemberRepository.save(TodoProjectMember.builder()
                 .id(new TodoProjectMemberKey(project.getId(), carol.getId()))
                 .build());
         MockHttpSession adminSession = login(admin);
 
-        mockMvc.perform(post("/api/todo/actions")
+        mockMvc.perform(post("/api/todo/actions").with(csrf())
                         .session(adminSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -1165,7 +1092,7 @@ class TodoControllerIntegrationTest {
                 .userName("Admin")
                 .phone("13000000002")
                 .email("admin@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         userDepartmentRepository.save(UserDepartment.builder()
                 .userId(admin.getId())
@@ -1176,11 +1103,11 @@ class TodoControllerIntegrationTest {
                 .userName("Carol")
                 .phone("13000000004")
                 .email("carol@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         MockHttpSession adminSession = login(admin);
 
-        mockMvc.perform(post("/api/todo/actions")
+        mockMvc.perform(post("/api/todo/actions").with(csrf())
                         .session(adminSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -1195,7 +1122,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void createAction_unauthenticatedRequest_isRejected() throws Exception {
-        mockMvc.perform(post("/api/todo/actions")
+        mockMvc.perform(post("/api/todo/actions").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -1211,7 +1138,7 @@ class TodoControllerIntegrationTest {
     void updateAction_byActionMember_returnsUpdatedAction() throws Exception {
         MockHttpSession memberSession = login(member);
 
-        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId())
+        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId()).with(csrf())
                         .session(memberSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -1234,7 +1161,7 @@ class TodoControllerIntegrationTest {
     void updateAction_replacesMembers() throws Exception {
         MockHttpSession memberSession = login(member);
 
-        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId())
+        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId()).with(csrf())
                         .session(memberSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -1250,7 +1177,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void updateAction_byNonActionMember_returnsForbidden() throws Exception {
-        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId())
+        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId()).with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -1268,11 +1195,11 @@ class TodoControllerIntegrationTest {
                 .userName("Carol")
                 .phone("13000000004")
                 .email("carol@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         MockHttpSession memberSession = login(member);
 
-        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId())
+        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId()).with(csrf())
                         .session(memberSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -1290,14 +1217,14 @@ class TodoControllerIntegrationTest {
                 .userName("Carol")
                 .phone("13000000004")
                 .email("carol@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         projectMemberRepository.save(TodoProjectMember.builder()
                 .id(new TodoProjectMemberKey(project.getId(), carol.getId()))
                 .build());
         MockHttpSession memberSession = login(member);
 
-        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId())
+        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId()).with(csrf())
                         .session(memberSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -1315,7 +1242,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void updateAction_missingAction_returnsNotFound() throws Exception {
-        mockMvc.perform(put("/api/todo/actions/{actionId}", 9999L)
+        mockMvc.perform(put("/api/todo/actions/{actionId}", 9999L).with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -1329,7 +1256,7 @@ class TodoControllerIntegrationTest {
 
     @Test
     void updateAction_unauthenticatedRequest_isRejected() throws Exception {
-        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId())
+        mockMvc.perform(put("/api/todo/actions/{actionId}", action.getId()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -1344,7 +1271,7 @@ class TodoControllerIntegrationTest {
     void finishAction_setsEndDate() throws Exception {
         MockHttpSession memberSession = login(member);
 
-        mockMvc.perform(put("/api/todo/actions/{actionId}/finish", action.getId())
+        mockMvc.perform(put("/api/todo/actions/{actionId}/finish", action.getId()).with(csrf())
                         .session(memberSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(action.getId().intValue()))
@@ -1353,14 +1280,14 @@ class TodoControllerIntegrationTest {
 
     @Test
     void finishAction_byNonActionMember_returnsForbidden() throws Exception {
-        mockMvc.perform(put("/api/todo/actions/{actionId}/finish", action.getId())
+        mockMvc.perform(put("/api/todo/actions/{actionId}/finish", action.getId()).with(csrf())
                         .session(session))
                 .andExpect(status().isForbidden());
     }
 
     @Test
     void finishAction_unauthenticatedRequest_isRejected() throws Exception {
-        mockMvc.perform(put("/api/todo/actions/{actionId}/finish", action.getId()))
+        mockMvc.perform(put("/api/todo/actions/{actionId}/finish", action.getId()).with(csrf()))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -1379,7 +1306,7 @@ class TodoControllerIntegrationTest {
                 .build());
         MockHttpSession memberSession = login(member);
 
-        mockMvc.perform(delete("/api/todo/actions/{actionId}/finish", finished.getId())
+        mockMvc.perform(delete("/api/todo/actions/{actionId}/finish", finished.getId()).with(csrf())
                         .session(memberSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(finished.getId().intValue()))
@@ -1400,7 +1327,7 @@ class TodoControllerIntegrationTest {
                 .id(new TodoActionMemberKey(finished.getId(), member.getId()))
                 .build());
 
-        mockMvc.perform(delete("/api/todo/actions/{actionId}/finish", finished.getId())
+        mockMvc.perform(delete("/api/todo/actions/{actionId}/finish", finished.getId()).with(csrf())
                         .session(session))
                 .andExpect(status().isForbidden());
     }
@@ -1442,7 +1369,7 @@ class TodoControllerIntegrationTest {
                 .userName("Carol")
                 .phone("13000000004")
                 .email("carol@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         TodoProject other = projectRepository.save(TodoProject.builder()
                 .title("Other Project")
@@ -1490,7 +1417,7 @@ class TodoControllerIntegrationTest {
                 .userName("Carol")
                 .phone("13000000004")
                 .email("carol@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         TodoProject other = projectRepository.save(TodoProject.builder()
                 .title("Other Project")
@@ -1533,7 +1460,7 @@ class TodoControllerIntegrationTest {
                 .userName("Dana")
                 .phone("13000000005")
                 .email("dana@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
 
         mockMvc.perform(get("/api/todo/tree").param("userId", nobody.getId().toString()).session(session))
@@ -1570,7 +1497,7 @@ class TodoControllerIntegrationTest {
                 .userName(username)
                 .phone(phone)
                 .email(username.toLowerCase() + "@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         userDepartmentRepository.save(UserDepartment.builder()
                 .userId(manager.getId())
@@ -1581,16 +1508,6 @@ class TodoControllerIntegrationTest {
     }
 
     private MockHttpSession login(User loginUser) throws Exception {
-        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "username": "%s",
-                                  "password": "%s"
-                                }
-                                """.formatted(loginUser.getUserName(), PASSWORD)))
-                .andExpect(status().isOk())
-                .andReturn();
-        return (MockHttpSession) loginResult.getRequest().getSession();
+        return net.bitnp.guildofpioneers.auth.OidcTestUsers.session(loginUser.getId());
     }
 }

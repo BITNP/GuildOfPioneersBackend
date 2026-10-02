@@ -1,6 +1,8 @@
 package net.bitnp.guildofpioneers.common;
 
 import jakarta.servlet.http.HttpServletRequest;
+import net.bitnp.guildofpioneers.auth.IdentityConflictException;
+import org.springframework.dao.DataIntegrityViolationException;
 import lombok.extern.slf4j.Slf4j;
 import net.bitnp.guildofpioneers.storage.InvalidFileTypeException;
 import net.bitnp.guildofpioneers.storage.StoredFileNotFoundException;
@@ -41,12 +43,20 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler({PhoneAlreadyExistsException.class, UserNameAlreadyExistsException.class})
+    @ExceptionHandler({PhoneAlreadyExistsException.class, UserNameAlreadyExistsException.class,
+            IdentityConflictException.class})
     public ResponseEntity<Map<String, Object>> handleDuplicateRegistration(
             RuntimeException ex, HttpServletRequest request
     ) {
         log.trace("Registration rejected: {}", ex.getMessage());
         return build(HttpStatus.CONFLICT, "CONFLICT", ex.getMessage(), request);
+    }
+
+    /** Reports concurrent uniqueness failures without exposing database details. */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataConflict(
+            DataIntegrityViolationException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "CONFLICT", "Account or identity already exists", request);
     }
 
     @ExceptionHandler({TicketNotFoundException.class, TicketExpiredException.class})

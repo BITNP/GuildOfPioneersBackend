@@ -4,6 +4,8 @@ import net.bitnp.guildofpioneers.user.entity.Department;
 import net.bitnp.guildofpioneers.user.entity.DepartmentRole;
 import net.bitnp.guildofpioneers.user.entity.User;
 import net.bitnp.guildofpioneers.user.exception.UserNotFoundException;
+import net.bitnp.guildofpioneers.user.exception.PermissionDeniedException;
+import net.bitnp.guildofpioneers.auth.service.OidcIdentityService;
 import net.bitnp.guildofpioneers.user.repository.UserDepartmentRepository;
 import net.bitnp.guildofpioneers.user.repository.UserRepository;
 import org.springframework.security.core.Authentication;
@@ -33,16 +35,18 @@ public class PermissionService {
     }
 
     /**
-     * Resolves the current user from the authentication. The lookup ignores
-     * case, so any casing of the username matches.
+     * Resolves the current user by the stable site ID in the verified OIDC principal.
      *
      * @param authentication the current authentication
      * @return the resolved user
      * @throws UserNotFoundException if the current user cannot be resolved
      */
     public User currentUser(Authentication authentication) {
-        return userRepository.findByUserNameIgnoreCase(authentication.getName())
-                .orElseThrow(() -> new UserNotFoundException(authentication.getName()));
+        Long userId = OidcIdentityService.principal(authentication).getUserId();
+        if (userId == null) {
+            throw new PermissionDeniedException("Site admission required");
+        }
+        return userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException(userId));
     }
 
     /**
