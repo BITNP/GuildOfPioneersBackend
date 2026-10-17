@@ -15,11 +15,11 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.hamcrest.Matchers.startsWith;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -47,9 +47,6 @@ class UserControllerIntegrationTest {
     @Autowired
     private UserDepartmentRepository userDepartmentRepository;
 
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
     private User user;
     private User target;
     private User admin;
@@ -64,19 +61,19 @@ class UserControllerIntegrationTest {
                 .userName(USERNAME)
                 .phone("13000000000")
                 .email("alice@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         target = userRepository.save(User.builder()
                 .userName("Bob")
                 .phone("13000000001")
                 .email("bob@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         admin = userRepository.save(User.builder()
                 .userName("Admin")
                 .phone("13000000002")
                 .email("admin@example.com")
-                .password(passwordEncoder.encode(PASSWORD))
+                .password("historical-unused")
                 .build());
         userDepartmentRepository.save(UserDepartment.builder()
                 .userId(admin.getId())
@@ -84,29 +81,9 @@ class UserControllerIntegrationTest {
                 .role(DepartmentRole.LEADER)
                 .build());
 
-        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "username": "%s",
-                                  "password": "%s"
-                                }
-                                """.formatted(USERNAME, PASSWORD)))
-                .andExpect(status().isOk())
-                .andReturn();
-        session = (MockHttpSession) loginResult.getRequest().getSession();
+        session = net.bitnp.guildofpioneers.auth.OidcTestUsers.session(userRepository.findByUserNameIgnoreCase(USERNAME).orElseThrow().getId());
 
-        MvcResult adminLogin = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "username": "Admin",
-                                  "password": "%s"
-                                }
-                                """.formatted(PASSWORD)))
-                .andExpect(status().isOk())
-                .andReturn();
-        adminSession = (MockHttpSession) adminLogin.getRequest().getSession();
+        adminSession = net.bitnp.guildofpioneers.auth.OidcTestUsers.session(userRepository.findByUserNameIgnoreCase("Admin").orElseThrow().getId());
     }
 
     @Test
@@ -134,7 +111,7 @@ class UserControllerIntegrationTest {
 
     @Test
     void selfUpdatesOwnProfile_viaUsersEndpoint_returnsUpdatedProfile() throws Exception {
-        mockMvc.perform(put("/api/users/{id}", user.getId())
+        mockMvc.perform(put("/api/users/{id}", user.getId()).with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -152,7 +129,7 @@ class UserControllerIntegrationTest {
 
     @Test
     void adminUpdatesOtherUserProfile_returnsUpdatedProfile() throws Exception {
-        mockMvc.perform(put("/api/users/{id}", target.getId())
+        mockMvc.perform(put("/api/users/{id}", target.getId()).with(csrf())
                         .session(adminSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -170,7 +147,7 @@ class UserControllerIntegrationTest {
 
     @Test
     void nonAdminUpdatesOtherUserProfile_returnsForbidden() throws Exception {
-        mockMvc.perform(put("/api/users/{id}", target.getId())
+        mockMvc.perform(put("/api/users/{id}", target.getId()).with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -188,7 +165,7 @@ class UserControllerIntegrationTest {
                 "file", "avatar.png", MediaType.IMAGE_PNG_VALUE, new byte[]{1}
         );
 
-        mockMvc.perform(multipart(HttpMethod.PUT, "/api/users/{id}/avatar", target.getId())
+        mockMvc.perform(multipart(HttpMethod.PUT, "/api/users/{id}/avatar", target.getId()).with(csrf())
                         .file(avatar)
                         .session(session))
                 .andExpect(status().isForbidden());
@@ -196,7 +173,7 @@ class UserControllerIntegrationTest {
 
     @Test
     void updateUser_missingUser_returnsNotFound() throws Exception {
-        mockMvc.perform(put("/api/users/{id}", 9999L)
+        mockMvc.perform(put("/api/users/{id}", 9999L).with(csrf())
                         .session(adminSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""

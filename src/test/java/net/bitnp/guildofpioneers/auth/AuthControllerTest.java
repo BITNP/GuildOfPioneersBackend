@@ -1,5 +1,9 @@
 package net.bitnp.guildofpioneers.auth;
 
+import net.bitnp.guildofpioneers.auth.service.OidcIdentityService;
+
+import net.bitnp.guildofpioneers.auth.service.AuthService;
+
 import net.bitnp.guildofpioneers.config.SecurityConfig;
 import net.bitnp.guildofpioneers.user.AuthResponse;
 import net.bitnp.guildofpioneers.user.UserService;
@@ -18,6 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -32,6 +37,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(SecurityConfig.class)
 class AuthControllerTest {
 
+    @MockitoBean
+    private net.bitnp.guildofpioneers.auth.service.OidcIdentityService oidcIdentityService;
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -42,7 +50,7 @@ class AuthControllerTest {
     private UserService userService;
 
     @Test
-    @WithMockUser(username = "13800000000")
+    @WithMockUser(username = "13800000000", roles = "MEMBER")
     void uploadAvatar_returnsUpdatedUser() throws Exception {
         when(userService.updateAvatar(any(Authentication.class), any()))
                 .thenReturn(AuthResponse.builder()
@@ -55,7 +63,7 @@ class AuthControllerTest {
                 "file", "avatar.png", MediaType.IMAGE_PNG_VALUE, new byte[]{1}
         );
 
-        mockMvc.perform(multipart("/api/auth/avatar").file(file).with(request -> {
+        mockMvc.perform(multipart("/api/auth/avatar").with(csrf()).file(file).with(request -> {
                     request.setMethod("PUT");
                     return request;
                 }))
@@ -71,7 +79,7 @@ class AuthControllerTest {
                 "file", "avatar.png", MediaType.IMAGE_PNG_VALUE, new byte[]{1}
         );
 
-        mockMvc.perform(multipart("/api/auth/avatar").file(file).with(request -> {
+        mockMvc.perform(multipart("/api/auth/avatar").with(csrf()).file(file).with(request -> {
                     request.setMethod("PUT");
                     return request;
                 }))
@@ -79,7 +87,7 @@ class AuthControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "Alice")
+    @WithMockUser(username = "Alice", roles = "MEMBER")
     void updateProfile_returnsUpdatedUser() throws Exception {
         when(userService.updateProfile(any(Authentication.class), any()))
                 .thenReturn(AuthResponse.builder()
@@ -89,7 +97,7 @@ class AuthControllerTest {
                         .email("new@example.com")
                         .build());
 
-        mockMvc.perform(put("/api/auth/profile")
+        mockMvc.perform(put("/api/auth/profile").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -107,7 +115,7 @@ class AuthControllerTest {
 
     @Test
     void updateProfile_requiresAuthentication() throws Exception {
-        mockMvc.perform(put("/api/auth/profile")
+        mockMvc.perform(put("/api/auth/profile").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -118,8 +126,9 @@ class AuthControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = "ONBOARDING")
     void register_rejectsInvalidPhone() throws Exception {
-        mockMvc.perform(post("/api/auth/register")
+        mockMvc.perform(post("/api/auth/register").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -132,12 +141,13 @@ class AuthControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("phone must be a valid Chinese mobile number"));
-        verify(authService, never()).register(any());
+        verify(authService, never()).register(any(), any());
     }
 
     @Test
+    @WithMockUser(roles = "ONBOARDING")
     void register_rejectsInvalidEmail() throws Exception {
-        mockMvc.perform(post("/api/auth/register")
+        mockMvc.perform(post("/api/auth/register").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -150,13 +160,13 @@ class AuthControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("email must be a valid email address"));
-        verify(authService, never()).register(any());
+        verify(authService, never()).register(any(), any());
     }
 
     @Test
-    @WithMockUser(username = "Alice")
+    @WithMockUser(username = "Alice", roles = "MEMBER")
     void updateProfile_rejectsInvalidPhone() throws Exception {
-        mockMvc.perform(put("/api/auth/profile")
+        mockMvc.perform(put("/api/auth/profile").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -170,9 +180,9 @@ class AuthControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "Alice")
+    @WithMockUser(username = "Alice", roles = "MEMBER")
     void updateProfile_rejectsInvalidEmail() throws Exception {
-        mockMvc.perform(put("/api/auth/profile")
+        mockMvc.perform(put("/api/auth/profile").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

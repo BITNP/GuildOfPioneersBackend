@@ -61,7 +61,7 @@ class UserServiceTest {
                 .phone("13800000000")
                 .password("encoded-hash")
                 .build();
-        when(userRepository.findByUserNameIgnoreCase("Alice")).thenReturn(Optional.of(user));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
         when(userDepartmentRepository.findByUserId(7L)).thenReturn(
                 List.of(UserDepartment.builder()
                         .userId(7L)
@@ -89,7 +89,7 @@ class UserServiceTest {
                 .phone("13800000000")
                 .password("encoded-hash")
                 .build();
-        when(userRepository.findByUserNameIgnoreCase("Alice")).thenReturn(Optional.of(user));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
         when(userDepartmentRepository.findByUserId(7L)).thenReturn(List.of());
 
         AuthResponse response = userService.getCurrentUser(authentication);
@@ -162,7 +162,7 @@ class UserServiceTest {
                 .phone("13800000000")
                 .password("encoded-hash")
                 .build();
-        when(userRepository.findByUserNameIgnoreCase("Alice")).thenReturn(Optional.of(user));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
         when(fileStorageService.avatarUrl(42L)).thenReturn("/uploads/avatars/42?v=1720000000000");
         MockMultipartFile file = new MockMultipartFile(
                 "file", "avatar.jpg", "image/jpeg", new byte[]{(byte) 0xFF, (byte) 0xD8}
@@ -185,7 +185,7 @@ class UserServiceTest {
                 .email("alice@example.com")
                 .password("encoded-hash")
                 .build();
-        when(userRepository.findByUserNameIgnoreCase("Alice")).thenReturn(Optional.of(user));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
         when(userRepository.save(user)).thenReturn(user);
 
         UpdateProfileRequest request = UpdateProfileRequest.builder()
@@ -212,7 +212,7 @@ class UserServiceTest {
                 .phone("13800000000")
                 .password("encoded-hash")
                 .build();
-        when(userRepository.findByUserNameIgnoreCase("Alice")).thenReturn(Optional.of(user));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
         when(userRepository.save(user)).thenReturn(user);
 
         UpdateProfileRequest request = UpdateProfileRequest.builder()
@@ -234,7 +234,7 @@ class UserServiceTest {
                 .phone("13800000000")
                 .password("encoded-hash")
                 .build();
-        when(userRepository.findByUserNameIgnoreCase("Alice")).thenReturn(Optional.of(user));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
         when(userRepository.existsByPhone("13900000000")).thenReturn(true);
 
         UpdateProfileRequest request = UpdateProfileRequest.builder()
@@ -255,7 +255,7 @@ class UserServiceTest {
                 .email("alice@example.com")
                 .password("encoded-hash")
                 .build();
-        when(userRepository.findByUserNameIgnoreCase("Alice")).thenReturn(Optional.of(user));
+        when(permissionService.currentUser(authentication)).thenReturn(user);
         when(userRepository.save(user)).thenReturn(user);
 
         UpdateProfileRequest request = UpdateProfileRequest.builder()

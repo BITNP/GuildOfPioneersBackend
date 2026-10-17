@@ -1,22 +1,31 @@
 package net.bitnp.guildofpioneers.auth;
 
-import jakarta.servlet.http.Cookie;
+import net.bitnp.guildofpioneers.auth.dto.AuthStatusResponse;
+
+import net.bitnp.guildofpioneers.auth.dto.RegisterRequest;
+
+import net.bitnp.guildofpioneers.auth.service.OidcIdentityService;
+
+import net.bitnp.guildofpioneers.auth.service.AuthService;
+
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
-import lombok.extern.slf4j.Slf4j;
+import java.io.IOException;
+import java.util.Map;
 import net.bitnp.guildofpioneers.user.AuthResponse;
 import net.bitnp.guildofpioneers.user.UpdateProfileRequest;
 import net.bitnp.guildofpioneers.user.UserService;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.web.multipart.MultipartFile;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -25,120 +34,93 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
-/**
- * Authentication endpoints for registration, login, profile retrieval, and avatar upload.
- */
-@Slf4j
+/** OIDC login, admission and site-owned profile endpoints; never exposes provider tokens. */
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
-
-    private static final int REMEMBER_ME_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
-    private static final int REMEMBER_ME_SESSION_TIMEOUT_SECONDS = REMEMBER_ME_MAX_AGE_SECONDS;
-
     private final AuthService authService;
     private final UserService userService;
-    private final AuthenticationManager authenticationManager;
-    private final SecurityContextRepository securityContextRepository;
+    private final ClientRegistrationRepository registrations;
+    private final SecurityContextRepository contexts;
 
-    public AuthController(
-            AuthService authService,
-            UserService userService,
-            AuthenticationManager authenticationManager,
-            SecurityContextRepository securityContextRepository
-    ) {
+    public AuthController(AuthService authService, UserService userService,
+                          ClientRegistrationRepository registrations, SecurityContextRepository contexts) {
         this.authService = authService;
         this.userService = userService;
-        this.authenticationManager = authenticationManager;
-        this.securityContextRepository = securityContextRepository;
+        this.registrations = registrations;
+        this.contexts = contexts;
     }
 
+    /** Starts login with a site-relative return path and a browser-bound authorization request. */
+    @GetMapping("/login")
+    public void login(@RequestParam(defaultValue = "/") String returnTo,
+                      HttpServletRequest request, HttpServletResponse response) throws IOException {
+        try {
+            registrations.findByRegistrationId("keycloak");
+        } catch (OAuth2AuthenticationException ex) {
+            response.sendRedirect("/login?error=provider_unavailable");
+            return;
+        }
+        request.getSession().setAttribute(LoginRedirects.SESSION_ATTRIBUTE, LoginRedirects.safePath(returnTo));
+        response.setHeader("Cache-Control", "no-store");
+        response.sendRedirect("/api/auth/oidc/authorize/keycloak");
+    }
+
+    /** Reports admission separately from authentication, with suggestions only for the current identity. */
+    @GetMapping("/status")
+    public ResponseEntity<AuthStatusResponse> status(Authentication authentication) {
+        AuthStatusResponse result;
+        if (authentication == null || !(authentication.getPrincipal() instanceof GuildOidcUser principal)) {
+            result = new AuthStatusResponse("anonymous", null, null, false);
+        } else if (principal.getUserId() == null) {
+            String name = principal.getPreferredUsername();
+            if (name == null || name.isBlank()) name = principal.getFullName();
+            String email = Boolean.TRUE.equals(principal.getEmailVerified()) ? principal.getEmail() : null;
+            result = new AuthStatusResponse("onboarding_required", null,
+                    new AuthStatusResponse.ProfileSuggestions(name, email), authService.isBootstrapAdmin(principal));
+        } else {
+            result = new AuthStatusResponse("active", userService.getCurrentUser(authentication), null, false);
+        }
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result);
+    }
+
+    /** Materializes the current session's masked CSRF token for same-origin write requests. */
+    @GetMapping("/csrf")
+    public ResponseEntity<Map<String, String>> csrf(CsrfToken token) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(Map.of("token", token.getToken(), "headerName", token.getHeaderName()));
+    }
+
+    /** Completes admission, then replaces the session principal with the stable site identity. */
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
-        return authService.register(request);
-    }
-
-    /**
-     * Authenticates a user and stores the session. When {@code rememberMe} is set,
-     * the session and its cookie are extended to 30 days so that the user stays
-     * logged in across browser restarts.
-     *
-     * @param request      the login credentials
-     * @param httpRequest  the servlet request used for session storage
-     * @param httpResponse the servlet response used for session storage
-     * @return the authenticated user profile
-     */
-    @PostMapping("/login")
-    public AuthResponse login(
-            @Valid @RequestBody LoginRequest request,
-            HttpServletRequest httpRequest,
-            HttpServletResponse httpResponse
-    ) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
-        );
-        SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(authentication);
+    public AuthResponse register(@Valid @RequestBody RegisterRequest request, Authentication authentication,
+                                 HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        GuildOidcUser principal = OidcIdentityService.principal(authentication);
+        Long id = authService.register(request, principal);
+        GuildOidcUser admitted = principal.withUserId(id);
+        OAuth2AuthenticationToken token = new OAuth2AuthenticationToken(admitted, admitted.getAuthorities(), "keycloak");
+        httpRequest.changeSessionId();
+        var context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(token);
         SecurityContextHolder.setContext(context);
-        securityContextRepository.saveContext(context, httpRequest, httpResponse);
-        if (Boolean.TRUE.equals(request.getRememberMe())) {
-            HttpSession session = httpRequest.getSession();
-            session.setMaxInactiveInterval(REMEMBER_ME_SESSION_TIMEOUT_SECONDS);
-            httpResponse.addCookie(buildSessionCookie(session));
-        }
-        log.trace("User {} logged in", request.getUsername());
-        return userService.getCurrentUser(authentication);
+        contexts.saveContext(context, httpRequest, httpResponse);
+        return userService.getCurrentUser(token);
     }
 
     @GetMapping("/me")
-    public AuthResponse me(Authentication authentication) {
-        return userService.getCurrentUser(authentication);
-    }
+    public AuthResponse me(Authentication authentication) { return userService.getCurrentUser(authentication); }
 
     @PutMapping("/avatar")
-    public AuthResponse uploadAvatar(
-            Authentication authentication,
-            @RequestParam("file") MultipartFile file
-    ) {
+    public AuthResponse uploadAvatar(Authentication authentication, @RequestParam("file") MultipartFile file) {
         return userService.updateAvatar(authentication, file);
     }
 
-    /**
-     * Updates the authenticated user's phone and email. The username is not editable.
-     *
-     * @param request        the validated profile data
-     * @param authentication the current authentication
-     * @return the updated user profile
-     */
+    /** Updates site-owned contact fields without changing the verified identity or username. */
     @PutMapping("/profile")
-    public AuthResponse updateProfile(
-            @Valid @RequestBody UpdateProfileRequest request,
-            Authentication authentication
-    ) {
-        log.trace("User {} updated their profile", authentication.getName());
+    public AuthResponse updateProfile(@Valid @RequestBody UpdateProfileRequest request, Authentication authentication) {
         return userService.updateProfile(authentication, request);
-    }
-
-    /**
-     * Builds a persistent copy of the session cookie so that the session
-     * survives a browser restart.
-     *
-     * @param session the session to remember
-     * @return the cookie to write on the response
-     */
-    private Cookie buildSessionCookie(HttpSession session) {
-        var cookieConfig = session.getServletContext().getSessionCookieConfig();
-        String name = cookieConfig.getName();
-        if (name == null || name.isEmpty()) {
-            name = "JSESSIONID";
-        }
-        Cookie cookie = new Cookie(name, session.getId());
-        cookie.setPath(cookieConfig.getPath() != null ? cookieConfig.getPath() : "/");
-        cookie.setMaxAge(REMEMBER_ME_MAX_AGE_SECONDS);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(cookieConfig.isSecure());
-        return cookie;
     }
 }

@@ -42,7 +42,7 @@ public class User {
     @Column(name = "email")
     private String email;
 
-    @NotBlank
-    @Column(name = "password", nullable = false)
+    // Historical hashes are retained for migration only; never used for authentication.
+    @Column(name = "password")
     private String password;
 }

@@ -1,6 +1,7 @@
 package net.bitnp.guildofpioneers.user.repository;
 
 import net.bitnp.guildofpioneers.user.entity.UserDepartment;
+import net.bitnp.guildofpioneers.user.entity.Department;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -11,4 +12,6 @@ import java.util.List;
 public interface UserDepartmentRepository extends JpaRepository<UserDepartment, Long> {
 
     List<UserDepartment> findByUserId(Long userId);
+
+    boolean existsByDepartment(Department department);
 }

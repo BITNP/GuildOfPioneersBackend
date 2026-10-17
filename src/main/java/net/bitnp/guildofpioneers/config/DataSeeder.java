@@ -37,7 +37,6 @@ import net.bitnp.guildofpioneers.user.repository.UserStudentRepository;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,7 +51,7 @@ import java.util.Set;
 
 /**
  * Seeds fake development data on startup. Active only when {@code app.seed-data=true}
- * (the default for the local dev configuration). Users are seeded when the users
+ * through explicit development opt-in. Users are seeded when the users
  * table is empty, and todo projects are seeded when the todo_projects table is empty,
  * so existing data is never overwritten.
  */
@@ -63,10 +62,8 @@ public class DataSeeder implements ApplicationRunner {
 
     private static final int USER_COUNT = 20;
     private static final int TICKET_COUNT = 5;
-    private static final String SEED_PASSWORD = "password123";
     private static final String ADMIN_USERNAME = "admin";
     private static final String ADMIN_PHONE = "13800000001";
-    private static final String ADMIN_EMAIL = "admin@example.com";
     private static final String CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final int CODE_LENGTH = 12;
     private static final int TICKET_VALIDITY_DAYS = 30;
@@ -120,7 +117,6 @@ public class DataSeeder implements ApplicationRunner {
     private final TodoTaskLeaderRepository todoTaskLeaderRepository;
     private final TodoTaskMemberRepository todoTaskMemberRepository;
     private final TodoActionMemberRepository todoActionMemberRepository;
-    private final PasswordEncoder passwordEncoder;
     private final SecureRandom random = new SecureRandom();
 
     public DataSeeder(
@@ -136,8 +132,7 @@ public class DataSeeder implements ApplicationRunner {
             TodoProjectMemberRepository todoProjectMemberRepository,
             TodoTaskLeaderRepository todoTaskLeaderRepository,
             TodoTaskMemberRepository todoTaskMemberRepository,
-            TodoActionMemberRepository todoActionMemberRepository,
-            PasswordEncoder passwordEncoder
+            TodoActionMemberRepository todoActionMemberRepository
     ) {
         this.userRepository = userRepository;
         this.userStudentRepository = userStudentRepository;
@@ -152,12 +147,11 @@ public class DataSeeder implements ApplicationRunner {
         this.todoTaskLeaderRepository = todoTaskLeaderRepository;
         this.todoTaskMemberRepository = todoTaskMemberRepository;
         this.todoActionMemberRepository = todoActionMemberRepository;
-        this.passwordEncoder = passwordEncoder;
     }
 
     /**
      * Populates the database with fake users, registration tickets, and todo data.
-     * The site admin is always seeded if missing; fake users are seeded only when
+     * Fake users without login bindings are seeded only when
      * the users table is empty, and todo projects are seeded only when the
      * todo_projects table is empty, so existing data is never overwritten.
      *
@@ -166,7 +160,6 @@ public class DataSeeder implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        seedAdmin();
         List<User> users = userRepository.findAll();
         if (users.isEmpty()) {
             users = seedUsers();
@@ -175,29 +168,6 @@ public class DataSeeder implements ApplicationRunner {
                     users.size(), TICKET_COUNT);
         }
         seedTodoData(users);
-    }
-
-    /**
-     * Creates the dedicated site admin account (with the ADMIN department) when it
-     * does not already exist, so the maintainer can log in even when the database
-     * already contains regular users.
-     */
-    private void seedAdmin() {
-        if (userRepository.findByUserNameIgnoreCase(ADMIN_USERNAME).isPresent()) {
-            return;
-        }
-        User admin = userRepository.save(User.builder()
-                .userName(ADMIN_USERNAME)
-                .phone(ADMIN_PHONE)
-                .email(ADMIN_EMAIL)
-                .password(passwordEncoder.encode(SEED_PASSWORD))
-                .build());
-        userDepartmentRepository.save(UserDepartment.builder()
-                .userId(admin.getId())
-                .department(Department.ADMIN)
-                .role(DepartmentRole.LEADER)
-                .build());
-        log.info("Seeded admin user {}", ADMIN_USERNAME);
     }
 
     private List<User> seedUsers() {
@@ -213,7 +183,6 @@ public class DataSeeder implements ApplicationRunner {
                     .userName(name)
                     .phone(generateUniquePhone(phones))
                     .email(name.toLowerCase() + (i + 1) + "@example.com")
-                    .password(passwordEncoder.encode(SEED_PASSWORD))
                     .build());
             users.add(user);
 

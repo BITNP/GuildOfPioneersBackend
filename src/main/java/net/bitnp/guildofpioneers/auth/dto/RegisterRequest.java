@@ -1,4 +1,4 @@
-package net.bitnp.guildofpioneers.auth;
+package net.bitnp.guildofpioneers.auth.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -25,15 +25,13 @@ public class RegisterRequest {
     private String phone;
 
     @NotBlank
-    @Size(min = 8)
-    private String password;
-
-    @NotBlank
+    @Size(max = 255)
     private String userName;
 
-    @NotBlank
+    @Size(max = 255)
     private String ticketCode;
 
     @Email(message = "must be a valid email address")
+    @Size(max = 255)
     private String email;
 }
